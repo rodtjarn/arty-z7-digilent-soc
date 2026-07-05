@@ -39,10 +39,10 @@ cd sw && make
 **To run on hardware:**
 
 ```
-xsdb sw/run_gpio_test.tcl
+cd sw && make run
 ```
 
-This programs the SoC bitstream, downloads the ELF over JTAG, initializes the PS, and starts execution. LEDs blink immediately.
+This programs the SoC bitstream, downloads the ELF over JTAG, initializes the PS, and starts execution. LEDs blink immediately. Note that `arty-z7-soc`'s `make program` only programs the FPGA fabric — it does not init the PS or load/run software, so use `sw`'s `make run` (or `xsdb sw/run_gpio_test.tcl` directly) to actually see the test execute.
 
 ## Toolchain
 

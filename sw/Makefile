@@ -22,7 +22,10 @@ startup.o: startup.s
 gpio_test.bin: gpio_test.elf
 	$(OBJCOPY) -O binary $< $@
 
+run: gpio_test_low.elf
+	xsdb run_gpio_test.tcl
+
 clean:
 	rm -f *.o *.elf *.bin gpio_test_low.elf
 
-.PHONY: all clean
+.PHONY: all clean run

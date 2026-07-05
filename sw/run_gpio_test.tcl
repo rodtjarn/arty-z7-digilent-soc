@@ -6,10 +6,24 @@ set elf_file  [file normalize [file join [file dirname [info script]] \
     "gpio_test_low.elf"]]
 set ps7_init  [file normalize [file join [file dirname [info script]] \
     "../arty-z7-soc/hw/ps7_init.tcl"]]
+set stamp_file [file normalize [file join [file dirname [info script]] \
+    ".program_stamp"]]
 
 puts "Bitstream : $bit_file"
 puts "ELF       : $elf_file"
 puts "ps7_init  : $ps7_init"
+
+# Bitstream flashing over JTAG takes several seconds; skip it when the FPGA is
+# already running the exact bitstream we'd flash. A hash comparison alone can't
+# tell (it doesn't know about power cycles or reprogramming by other tools), so
+# it's paired with a live "fpga -state" query below for ground truth.
+set current_hash [lindex [exec sha256sum $bit_file] 0]
+set stamped_hash ""
+if {[file exists $stamp_file]} {
+    set fp [open $stamp_file r]
+    set stamped_hash [string trim [read $fp]]
+    close $fp
+}
 
 connect -host localhost -port 3121
 puts "Connected to hw_server"
@@ -22,14 +36,30 @@ puts "-------------------------\n"
 targets -set -filter {name =~ "ARM Cortex-A9 MPCore #0"}
 puts "Selected ARM Cortex-A9 MPCore #0"
 
-stop
-puts "Core halted"
+# stop throws instead of no-op'ing if the core is already halted (e.g. left
+# stopped by a prior run) -- either way the core ends up halted, so tolerate it.
+if {[catch {stop} err]} {
+    puts "Core already halted ($err)"
+} else {
+    puts "Core halted"
+}
 
-# Program PL bitstream
+# Program PL bitstream, unless it's unchanged and the FPGA is already
+# configured (live DONE-bit check, not just our stamp file -- catches power
+# cycles / external reprogramming since the stamp was written).
 targets -set -filter {name =~ "xc7z010"}
-puts "Programming PL bitstream..."
-fpga $bit_file
-puts "Bitstream programmed"
+set fpga_state [fpga -state]
+puts "FPGA state: $fpga_state"
+if {$current_hash eq $stamped_hash && ![string match "*not configured*" $fpga_state]} {
+    puts "Bitstream unchanged and FPGA already configured -- skipping PL programming"
+} else {
+    puts "Programming PL bitstream..."
+    fpga $bit_file
+    puts "Bitstream programmed"
+    set fp [open $stamp_file w]
+    puts -nonewline $fp $current_hash
+    close $fp
+}
 
 # Back to ARM core
 targets -set -filter {name =~ "ARM Cortex-A9 MPCore #0"}

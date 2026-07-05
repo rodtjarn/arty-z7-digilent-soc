@@ -8,6 +8,14 @@ Bare-metal ARM Cortex-A9 firmware running on a Digilent Arty Z7-10, toggling LED
 - **LEDs**: 4 user LEDs, active high (pins R14, P14, N16, M14)
 - **Boot mode**: JP4 in JTAG position
 
+## Quickstart
+
+```
+make
+```
+
+Builds the `arty-z7-soc` bitstream and `sw` firmware if their sources changed (skipped otherwise), then programs and runs on hardware. Requires `hw_server` running and the board connected over JTAG. The PL bitstream flash itself is also skipped when the bitstream is unchanged and the FPGA already reports configured (checked live via `xsdb`, not just a timestamp) — everything else (ELF download, PS init, test execution) always runs. See `make help` for other targets (`build`, `clean`).
+
 ## Projects
 
 ### `arty-z7-counter/` — PL-only LED counter
@@ -42,7 +50,7 @@ cd sw && make
 cd sw && make run
 ```
 
-This programs the SoC bitstream, downloads the ELF over JTAG, initializes the PS, and starts execution. LEDs blink immediately. Note that `arty-z7-soc`'s `make program` only programs the FPGA fabric — it does not init the PS or load/run software, so use `sw`'s `make run` (or `xsdb sw/run_gpio_test.tcl` directly) to actually see the test execute.
+This programs the SoC bitstream (unless it's unchanged and the FPGA is already configured), downloads the ELF over JTAG, initializes the PS, and starts execution. LEDs blink immediately. Note that `arty-z7-soc`'s `make program` only programs the FPGA fabric — it does not init the PS or load/run software, so use `sw`'s `make run` (or the top-level `make`, or `xsdb sw/run_gpio_test.tcl` directly) to actually see the test execute.
 
 ## Toolchain
 

@@ -29,6 +29,9 @@ clockInfo.txt
 *.elf
 *.bin
 
+# Records the hash of the last bitstream flashed to hardware (sw/run_gpio_test.tcl)
+sw/.program_stamp
+
 # Old/scratch Vivado project (use arty-z7-counter/ instead)
 counter/
 

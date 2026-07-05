@@ -72,14 +72,11 @@ if {[file exists $wrapper_path]} {
     error "Wrapper file not found at $wrapper_path"
 }
 
-# Add all IP VHDL source files generated for this design
-set gen_dir "$project_dir/arty_z7_soc.gen/sources_1/bd/design_1"
-set vhd_files [glob -nocomplain $gen_dir/ip/*/synth/*.vhd]
-set shared_vhd [glob -nocomplain $gen_dir/ipshared/*/hdl/*.vhd]
-set all_vhd [concat $vhd_files $shared_vhd]
-if {[llength $all_vhd] > 0} {
-    eval add_files -norecurse $all_vhd
-}
+# NOTE: IP-generated VHDL netlist files (ip/*/synth/*.vhd, ipshared/*/hdl/*.vhd)
+# are already registered in the project by generate_target as part of each IP's
+# sub-design scope (with correct VHDL library assignments). Re-adding them
+# explicitly via add_files corrupts that scope/library association and can
+# cause synthesis to fail to resolve IP modules (Vivado warns about this).
 
 # Update compile order to resolve all IP dependencies
 update_compile_order -fileset sources_1
@@ -87,22 +84,43 @@ update_compile_order -fileset sources_1
 # Add pin constraints
 add_files -fileset constrs_1 [file join $src_dir top.xdc]
 
-# Synthesize
-synth_design -top design_1_wrapper -part xc7z010clg400-1
-write_checkpoint -force [file join $project_dir post_synth.dcp]
+# Synthesize and implement via the standard project-mode run flow. This is
+# required (rather than calling synth_design directly on the wrapper) so that
+# IP cores generated with out-of-context synthesis checkpoints (the default
+# for axi_gpio/interconnect/etc.) get their own OOC synthesis run producing a
+# .dcp that is automatically linked into the top-level synthesis run; calling
+# synth_design directly skips that step and fails to resolve the IP modules.
+launch_runs synth_1 -jobs [get_param general.maxThreads]
+wait_on_run synth_1
+if {[get_property PROGRESS [get_runs synth_1]] != "100%"} {
+    error "Synthesis run synth_1 did not complete successfully"
+}
 
-# Implement
-opt_design
-place_design
-write_checkpoint -force [file join $project_dir post_place.dcp]
-route_design
-write_checkpoint -force [file join $project_dir post_route.dcp]
+launch_runs impl_1 -to_step write_bitstream -jobs [get_param general.maxThreads]
+wait_on_run impl_1
+if {[get_property PROGRESS [get_runs impl_1]] != "100%"} {
+    error "Implementation run impl_1 did not complete successfully"
+}
 
-# Generate bitstream
-write_bitstream -force [file join $project_dir arty_z7_soc.bit]
+# Copy the bitstream out of the run directory to the top-level hw output dir
+set run_bit [get_property DIRECTORY [get_runs impl_1]]/design_1_wrapper.bit
+file copy -force $run_bit [file join $project_dir arty_z7_soc.bit]
 
 # Export hardware (XSA) for Vitis/PetaLinux
+open_run impl_1
 write_hw_platform -fixed -include_bit -force -file [file join $project_dir arty_z7_soc.xsa]
+
+# Copy the PS7 init files (ps7_init.tcl/.c/.h + GPL variants) generated
+# alongside the ps7 IP core out to hw/, flat, so xsdb scripts (e.g.
+# sw/run_gpio_test.tcl) have a stable path to source. These live in the
+# .gen tree per IP core and are not otherwise exposed outside the XSA zip.
+set ps7_gen_dir "$project_dir/arty_z7_soc.gen/sources_1/bd/design_1/ip/design_1_ps7_0"
+foreach f {ps7_init.tcl ps7_init.c ps7_init.h ps7_init_gpl.c ps7_init_gpl.h} {
+    set src [file join $ps7_gen_dir $f]
+    if {[file exists $src]} {
+        file copy -force $src [file join $project_dir $f]
+    }
+}
 
 puts "Build complete: [file join $project_dir arty_z7_soc.bit]"
 close_project

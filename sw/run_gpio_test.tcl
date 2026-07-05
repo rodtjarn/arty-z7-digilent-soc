@@ -4,7 +4,8 @@ set bit_file  [file normalize [file join [file dirname [info script]] \
     "../arty-z7-soc/hw/arty_z7_soc.bit"]]
 set elf_file  [file normalize [file join [file dirname [info script]] \
     "gpio_test_low.elf"]]
-set ps7_init  "/tmp/ps7_init_data/ps7_init.tcl"
+set ps7_init  [file normalize [file join [file dirname [info script]] \
+    "../arty-z7-soc/hw/ps7_init.tcl"]]
 
 puts "Bitstream : $bit_file"
 puts "ELF       : $elf_file"

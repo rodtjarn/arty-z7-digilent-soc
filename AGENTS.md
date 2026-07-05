@@ -59,10 +59,10 @@ make clean
 
 ### Critical Build Lessons
 
-- **Never use `synth_design` directly on BDs** — always use `launch_runs synth_1`.
-- **`generate_target all [get_files *.bd]` alone is insufficient** — also call `generate_target {synth} [get_files *.xci]`.
+- **Never call `synth_design`/`opt_design`/`place_design`/`route_design` directly on the BD wrapper** — always use `launch_runs synth_1` then `launch_runs impl_1 -to_step write_bitstream`. AXI GPIO (and other) IPs default to `GENERATE_SYNTH_CHECKPOINT=1` (out-of-context synthesis). Calling `synth_design` directly on the flattened wrapper skips the OOC run that produces each IP's checkpoint, so elaboration fails with `[Synth 8-439] module 'design_1_axi_gpio_btn_0' not found` (or similar) even though the IP's `.xci`/generated sources are present and correctly registered.
+- **`generate_target all [get_files *.bd]` is sufficient** — do not also manually `add_files -norecurse` the generated `ip/*/synth/*.vhd` or `ipshared/*/hdl/*.vhd` files. `generate_target` already registers them in the project with the correct VHDL library associations as part of each IP's sub-design scope; re-adding them explicitly only produces `CRITICAL WARNING: [filemgmt 20-1440]` and risks corrupting that scope.
 - **Wrapper must be explicitly added** — `add_files -norecurse` on the wrapper path + `set_property top design_1_wrapper`.
-- **VHDL IP files must be explicitly added** — `add_files -norecurse` on all `ip/*/synth/*.vhd` and `ipshared/*/hdl/*.vhd`.
+- **Bitstream/XSA come from the run, not from manual `write_bitstream`** — after `launch_runs impl_1 -to_step write_bitstream`, copy `[get_property DIRECTORY [get_runs impl_1]]/design_1_wrapper.bit` to the desired output path, and `open_run impl_1` before `write_hw_platform`.
 
 ## Bare-Metal Software (sw/)
 

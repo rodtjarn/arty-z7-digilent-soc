@@ -56,13 +56,21 @@ rwr pc $entry
 rwr sp $sp
 puts [format "PC=0x%08X  SP=0x%08X" $entry $sp]
 
+# RESULT_ADDR lives in OCM outside the downloaded ELF image, so it isn't reset by
+# `dow` and still holds whatever a *previous* run left there. Clear it here, with
+# the core halted, instead of relying on the target's own early clear in main() --
+# otherwise the first poll below can race that clear and read a stale PASS/FAIL
+# from the prior run, reporting success in milliseconds with no test actually run.
+set result_addr 0x00001000
+mwr $result_addr 0
+puts "Cleared stale result sentinel at [format 0x%08X $result_addr]"
+
 puts "Running... (LEDs blink 0xA<->0x5 for 10 iterations)"
 con
 
 # gpio_test.c writes a sentinel to RESULT_ADDR once it finishes: RESULT_PASS after
 # 10 clean iterations, RESULT_FAIL immediately on any readback mismatch. Poll for it
 # instead of blocking on con forever, so a wedged core times out instead of stalling.
-set result_addr 0x00001000
 set result_pass 0x600d9000
 set result_fail 0xbad09000
 set timeout_ms  30000

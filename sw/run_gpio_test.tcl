@@ -56,5 +56,40 @@ rwr pc $entry
 rwr sp $sp
 puts [format "PC=0x%08X  SP=0x%08X" $entry $sp]
 
-puts "Running... (LEDs should blink 0xA<->0x5 if PASS)"
+puts "Running... (LEDs blink 0xA<->0x5 for 10 iterations)"
 con
+
+# gpio_test.c writes a sentinel to RESULT_ADDR once it finishes: RESULT_PASS after
+# 10 clean iterations, RESULT_FAIL immediately on any readback mismatch. Poll for it
+# instead of blocking on con forever, so a wedged core times out instead of stalling.
+set result_addr 0x00001000
+set result_pass 0x600d9000
+set result_fail 0xbad09000
+set timeout_ms  30000
+set poll_ms     200
+set elapsed_ms  0
+set result      ""
+
+while {$elapsed_ms < $timeout_ms} {
+    set value [mrd -value $result_addr]
+    if {$value == $result_pass} {
+        set result "PASS"
+        break
+    } elseif {$value == $result_fail} {
+        set result "FAIL"
+        break
+    }
+    after $poll_ms
+    incr elapsed_ms $poll_ms
+}
+
+stop
+puts "Core halted"
+
+if {$result eq "PASS"} {
+    puts "TEST PASSED"
+} elseif {$result eq "FAIL"} {
+    puts "TEST FAILED"
+} else {
+    puts "TEST FAILED (timed out waiting for result after ${timeout_ms}ms)"
+}

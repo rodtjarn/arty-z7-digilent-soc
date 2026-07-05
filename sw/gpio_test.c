@@ -11,6 +11,14 @@
 
 #define REG32(addr) (*(volatile unsigned int *)(addr))
 
+#define TEST_ITERATIONS 10
+
+// Fixed OCM word (well above .text/.data/.bss, well below the stack at 0x0000FFFC)
+// where run_gpio_test.tcl polls for the pass/fail sentinel after starting execution.
+#define RESULT_ADDR 0x00001000
+#define RESULT_PASS 0x600D9000
+#define RESULT_FAIL 0xBAD09000
+
 // Unlock SLCR, enable/configure FCLK0 (clock feeding the PL/AXI GPIO), then re-lock SLCR
 static void enable_fclk(void) {
     REG32(SLCR_UNLOCK) = 0xDF0D;
@@ -23,28 +31,42 @@ void delay(volatile int count) {
     while (count--);
 }
 
+// Park the core once the result sentinel has been written; wfi (not a busy loop)
+// so the CPU is idle rather than spinning while the harness reads the result.
+static void halt(void) {
+    while (1) {
+        __asm__ volatile("wfi");
+    }
+}
+
 int main(void) {
     enable_fclk();                                    // start the PL clock so AXI GPIO is reachable
     REG32(LED_GPIO_BASE + GPIO_TRI) = 0;               // LEDs: all bits output
     REG32(BTN_GPIO_BASE + GPIO_TRI) = BTN_MASK;        // buttons: all bits input
+    REG32(RESULT_ADDR) = 0;                            // clear any stale sentinel before the harness starts polling
 
-    while (1) {
+    for (int i = 0; i < TEST_ITERATIONS; i++) {
         // drive LED pattern 1010, then read back to confirm the write took effect
         REG32(LED_GPIO_BASE + GPIO_DATA) = 0xA;
         if ((REG32(LED_GPIO_BASE + GPIO_DATA) & LED_MASK) != 0xA) {
-            REG32(LED_GPIO_BASE + GPIO_DATA) = 0x1;    // readback mismatch: signal failure and hang
-            while (1);
+            REG32(LED_GPIO_BASE + GPIO_DATA) = 0x1;    // readback mismatch: signal failure
+            REG32(RESULT_ADDR) = RESULT_FAIL;
+            halt();
         }
         delay(25000000);
 
         // drive LED pattern 0101, then read back to confirm the write took effect
         REG32(LED_GPIO_BASE + GPIO_DATA) = 0x5;
         if ((REG32(LED_GPIO_BASE + GPIO_DATA) & LED_MASK) != 0x5) {
-            REG32(LED_GPIO_BASE + GPIO_DATA) = 0x2;    // readback mismatch: signal failure and hang
-            while (1);
+            REG32(LED_GPIO_BASE + GPIO_DATA) = 0x2;    // readback mismatch: signal failure
+            REG32(RESULT_ADDR) = RESULT_FAIL;
+            halt();
         }
         delay(25000000);
 
         (void)REG32(BTN_GPIO_BASE + GPIO_DATA);        // touch the button register (result unused)
     }
+
+    REG32(RESULT_ADDR) = RESULT_PASS;                  // completed all iterations without a mismatch
+    halt();
 }

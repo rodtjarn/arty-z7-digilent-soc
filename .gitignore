@@ -1,0 +1,51 @@
+# Vivado generated project directories
+*.cache/
+*.hw/
+*.ip_user_files/
+*.runs/
+*.sim/
+*.srcs/
+*.gen/
+
+# Vivado logs and journals
+vivado.jou
+vivado.log
+vivado_*.backup.jou
+vivado_*.backup.log
+vivado_*.jou
+vivado_*.log
+xvlog.pb
+clockInfo.txt
+
+# Vivado checkpoint / report files
+*.dcp
+*.rpt
+
+# Xilinx scratch directory
+.Xil/
+
+# Compiled outputs
+*.o
+*.elf
+*.bin
+
+# Old/scratch Vivado project (use arty-z7-counter/ instead)
+counter/
+
+# Scratch xsdb debug scripts (the working one is sw/run_gpio_test.tcl)
+arty-z7-soc/scripts/xsdb_*.tcl
+arty-z7-soc/scripts/vivado_*.tcl
+arty-z7-soc/scripts/vivado_*.jou
+arty-z7-soc/scripts/vivado_*.log
+arty-z7-soc/scripts/vivado.jou
+arty-z7-soc/scripts/vivado.log
+arty-z7-counter/scripts/vivado_*.jou
+arty-z7-counter/scripts/vivado_*.log
+arty-z7-counter/scripts/vivado.jou
+arty-z7-counter/scripts/vivado.log
+
+# Vivado project files inside bin/ (stray arty-z7-counter build artifacts)
+arty-z7-counter/bin/*.xpr
+arty-z7-counter/bin/*.cache
+arty-z7-counter/bin/*.hw
+arty-z7-counter/bin/*.ip_user_files

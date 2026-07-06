@@ -111,6 +111,25 @@ Can't be done over JTAG — needs physical access:
 
 See `AGENTS.md` for the full boot-chain breakdown, the Digilent board-preset details that make this work (correct DDR part, SD0/UART0 MIO pins), and — importantly — the `ps-clk-frequency` device-tree fix that's required to get a readable (non-garbled) serial console.
 
+#### 5. Networking (Ethernet)
+
+**Confirmed working** — bring the interface up and give it a few seconds for gigabit autonegotiation before checking status:
+
+```
+ifconfig eth0 up
+sleep 3
+cat /sys/class/net/eth0/carrier   # 1 once link is up
+```
+
+- **On a real network** (router/switch with DHCP): `udhcpc -i eth0` gets a lease normally.
+- **Direct cable to a PC** (no DHCP server on either end): assign static IPs instead —
+  ```
+  ifconfig eth0 192.168.7.2 netmask 255.255.255.0 up   # on the board
+  ```
+  and a matching static IP (e.g. `192.168.7.1/24`) on the PC's Ethernet interface, then `ping` between them.
+
+See `AGENTS.md` for why U-Boot's own "No ethernet found" at boot is expected/harmless (only the kernel's Ethernet driver supports the PHY reset line on this board).
+
 ## Toolchain
 
 - Vivado / Vitis 2026.1

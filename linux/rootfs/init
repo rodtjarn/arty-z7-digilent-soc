@@ -1,9 +1,14 @@
 #!/bin/sh
 mount -t proc none /proc
 mount -t sysfs none /sys
+# CONFIG_DEVTMPFS_MOUNT doesn't help here: it only auto-mounts during the
+# kernel's mount_root()/prepare_namespace() path, which is skipped entirely
+# when the initramfs itself is the root -- there's no separate "root" to
+# mount. Without this, /dev stays empty and cttyhack can't find the console.
+mount -t devtmpfs none /dev
 
 echo ""
 echo "Arty Z7-10 Linux boot test: reached userspace (initramfs shell)."
 echo ""
 
-exec /bin/sh
+exec setsid cttyhack /bin/sh

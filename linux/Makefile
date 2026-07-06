@@ -94,6 +94,9 @@ $(RAMDISK): rootfs/src/busybox $(UBOOT_ELF)
 	  CONFIG_PREFIX=$(CURDIR)/rootfs/initramfs install
 	cp rootfs/init rootfs/initramfs/init
 	chmod +x rootfs/initramfs/init
+	mkdir -p rootfs/initramfs/usr/share/udhcpc
+	cp rootfs/src/examples/udhcp/simple.script rootfs/initramfs/usr/share/udhcpc/default.script
+	chmod +x rootfs/initramfs/usr/share/udhcpc/default.script
 	cd rootfs/initramfs && \
 	  find . -print0 | bsdtar --null -cf - --format=newc -T - | gzip -9 > ../rootfs.cpio.gz
 	u-boot/src/tools/mkimage -A arm -O linux -T ramdisk -C gzip \

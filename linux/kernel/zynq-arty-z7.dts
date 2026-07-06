@@ -4,10 +4,14 @@
  *
  * PS7 config matches Digilent's official Vivado board preset
  * (arty-z7-10/A.0/preset.xml): DDR3 MT41J256M16 (512MB, 16-bit bus),
- * UART0 on MIO 14..15, SD0 on MIO 40..45 with card detect on MIO 47.
+ * UART0 on MIO 14..15, SD0 on MIO 40..45 with card detect on MIO 47,
+ * ENET0/GEM0 via RGMII to an onboard Realtek RTL8211E-VL PHY (MDIO address
+ * 1 per the Arty Z7 Reference Manual sec. 9; PHYRSTB on MIO9, INTB on MIO10
+ * -- INTB left unconnected here, phylib polls instead of using an irq).
  */
 /dts-v1/;
 #include "zynq-7000.dtsi"
+#include <dt-bindings/gpio/gpio.h>
 
 / {
 	model = "Digilent Arty Z7 board";
@@ -16,6 +20,7 @@
 	aliases {
 		serial0 = &uart0;
 		mmc0 = &sdhci0;
+		ethernet0 = &gem0;
 	};
 
 	memory@0 {
@@ -43,4 +48,17 @@
 
 &uart0 {
 	status = "okay";
+};
+
+&gem0 {
+	status = "okay";
+	phy-mode = "rgmii-id";
+	phy-handle = <&ethernet_phy>;
+
+	ethernet_phy: ethernet-phy@1 {
+		reg = <1>;
+		reset-gpios = <&gpio0 9 GPIO_ACTIVE_LOW>;
+		reset-assert-us = <10000>;
+		reset-deassert-us = <100000>;
+	};
 };

@@ -1,21 +1,39 @@
 # xsdb script: program SoC bitstream and run gpio_test on Arty Z7
 
-set bit_file  [file normalize [file join [file dirname [info script]] \
-    "../arty-z7-soc/hw/arty_z7_soc.bit"]]
+if {[info exists ::env(TEST_BIT)]} {
+    set bit_file [file normalize [file join [file dirname [info script]] $::env(TEST_BIT)]]
+} else {
+    set bit_file  [file normalize [file join [file dirname [info script]] \
+        "../arty-z7-soc/hw/arty_z7_soc.bit"]]
+}
 if {[info exists ::env(TEST_ELF)]} {
     set elf_file [file normalize [file join [file dirname [info script]] $::env(TEST_ELF)]]
 } else {
     set elf_file [file normalize [file join [file dirname [info script]] \
         "gpio_test_low.elf"]]
 }
-set ps7_init  [file normalize [file join [file dirname [info script]] \
-    "../arty-z7-soc/hw/ps7_init.tcl"]]
+if {[info exists ::env(TEST_PS7_INIT)]} {
+    set ps7_init [file normalize [file join [file dirname [info script]] $::env(TEST_PS7_INIT)]]
+} else {
+    set ps7_init  [file normalize [file join [file dirname [info script]] \
+        "../arty-z7-soc/hw/ps7_init.tcl"]]
+}
 set stamp_file [file normalize [file join [file dirname [info script]] \
     ".program_stamp"]]
 
 puts "Bitstream : $bit_file"
 puts "ELF       : $elf_file"
 puts "ps7_init  : $ps7_init"
+
+foreach {label path hint} [list \
+    "Bitstream" $bit_file "Run 'make build' from the repo root or 'make -C arty-z7-soc all'." \
+    "ELF" $elf_file "Run 'make -C sw all' or the selected step target." \
+    "ps7_init" $ps7_init "Run 'make build' from the repo root or 'make -C arty-z7-soc all'." \
+] {
+    if {![file exists $path]} {
+        error "$label missing: $path. $hint"
+    }
+}
 
 # Bitstream flashing over JTAG takes several seconds; skip it when the FPGA is
 # already running the exact bitstream we'd flash. A hash comparison alone can't

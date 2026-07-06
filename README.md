@@ -27,6 +27,8 @@ make step-04-timer
 
 `make steps-working` runs all currently implemented numbered steps.
 
+The top-level numbered targets first build any stale hardware/software outputs, then run the selected JTAG test. The `sw/` targets also preflight the required bitstream and `ps7_init.tcl`; if either is missing, they fail with a direct rebuild hint instead of an opaque `xsdb` error. During execution, the `xsdb` harness checks the live FPGA state and programs the PL when the bitstream is missing from the device or changed from the last stamped run.
+
 ## Projects
 
 ### `arty-z7-counter/` — PL-only LED counter

@@ -3,6 +3,8 @@ LD      := arm-none-eabi-gcc
 OBJCOPY := arm-none-eabi-objcopy
 CFLAGS  := -mcpu=cortex-a9 -mfloat-abi=soft -O2 -g -nostdlib -ffreestanding
 LFLAGS  := -mcpu=cortex-a9 -mfloat-abi=soft -nostdlib -Wl,-gc-sections -Wl,--build-id=none
+BIT_FILE := ../arty-z7-soc/hw/arty_z7_soc.bit
+PS7_INIT := ../arty-z7-soc/hw/ps7_init.tcl
 
 all: gpio_test.elf gpio_test.bin gpio_test_low.elf \
 	gpio_test_uart_low.elf gpio_test_ddr_low.elf gpio_test_gpio_low.elf \
@@ -54,22 +56,22 @@ startup.o: startup.s
 gpio_test.bin: gpio_test.elf
 	$(OBJCOPY) -O binary $< $@
 
-run: gpio_test_low.elf hw_server
+run: gpio_test_low.elf check-hw-artifacts hw_server
 	xsdb run_gpio_test.tcl
 
-run-uart: gpio_test_uart_low.elf hw_server
+run-uart: gpio_test_uart_low.elf check-hw-artifacts hw_server
 	TEST_ELF=gpio_test_uart_low.elf xsdb run_gpio_test.tcl
 
-run-ddr: gpio_test_ddr_low.elf hw_server
+run-ddr: gpio_test_ddr_low.elf check-hw-artifacts hw_server
 	TEST_ELF=gpio_test_ddr_low.elf xsdb run_gpio_test.tcl
 
-run-gpio: gpio_test_gpio_low.elf hw_server
+run-gpio: gpio_test_gpio_low.elf check-hw-artifacts hw_server
 	TEST_ELF=gpio_test_gpio_low.elf xsdb run_gpio_test.tcl
 
-run-buttons: gpio_test_buttons_low.elf hw_server
+run-buttons: gpio_test_buttons_low.elf check-hw-artifacts hw_server
 	TEST_ELF=gpio_test_buttons_low.elf xsdb run_gpio_test.tcl
 
-run-timer: gpio_test_timer_low.elf hw_server
+run-timer: gpio_test_timer_low.elf check-hw-artifacts hw_server
 	TEST_ELF=gpio_test_timer_low.elf xsdb run_gpio_test.tcl
 
 step-01-uart: run-uart
@@ -102,6 +104,16 @@ step-10-sd-raw:
 
 steps-working: step-01-uart step-02-ddr step-03-buttons step-04-timer
 
+check-hw-artifacts:
+	@test -f "$(BIT_FILE)" || { \
+		echo "Missing $(BIT_FILE). Run 'make build' from the repo root or 'make -C arty-z7-soc all'." >&2; \
+		exit 2; \
+	}
+	@test -f "$(PS7_INIT)" || { \
+		echo "Missing $(PS7_INIT). Run 'make build' from the repo root or 'make -C arty-z7-soc all'." >&2; \
+		exit 2; \
+	}
+
 # Start hw_server in the background if nothing is already listening on its
 # default port. It's a long-lived daemon meant to be reused across many
 # run/debug sessions, so we only launch it here rather than tying its
@@ -124,4 +136,4 @@ clean:
 .PHONY: all clean run run-uart run-ddr run-gpio run-buttons run-timer \
 	step-01-uart step-02-ddr step-03-buttons step-04-timer step-05-gic \
 	step-06-axi-timer step-07-custom-axi step-08-axi-bram \
-	step-09-cache-mmu step-10-sd-raw steps-working hw_server
+	step-09-cache-mmu step-10-sd-raw steps-working check-hw-artifacts hw_server

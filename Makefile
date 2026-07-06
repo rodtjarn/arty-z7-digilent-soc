@@ -22,16 +22,16 @@ build:
 linux-boot:
 	$(MAKE) -C linux all
 
-step-01-uart:
+step-01-uart: build
 	$(MAKE) -C sw step-01-uart
 
-step-02-ddr:
+step-02-ddr: build
 	$(MAKE) -C sw step-02-ddr
 
-step-03-buttons:
+step-03-buttons: build
 	$(MAKE) -C sw step-03-buttons
 
-step-04-timer:
+step-04-timer: build
 	$(MAKE) -C sw step-04-timer
 
 step-05-gic:
@@ -52,7 +52,7 @@ step-09-cache-mmu:
 step-10-sd-raw:
 	$(MAKE) -C sw step-10-sd-raw
 
-steps-working:
+steps-working: build
 	$(MAKE) -C sw steps-working
 
 # Programs the bitstream, downloads the ELF, inits the PS, and runs the test.

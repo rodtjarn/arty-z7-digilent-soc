@@ -141,8 +141,10 @@ Numbered step targets are also available from the repo root:
 Agent success rules for bare-metal steps:
 
 - Every new bare-metal test must print a UART banner/stage/fail line and write the OCM PASS/FAIL sentinel.
+- Make targets must preflight the selected ELF, `arty-z7-soc/hw/arty_z7_soc.bit`, and `arty-z7-soc/hw/ps7_init.tcl` before hardware execution; missing artifacts should fail with a rebuild hint.
 - Preserve the JTAG order: `dow` before `ps7_init`, then `ps7_init`, `ps7_post_config`, `rwr cpsr 0x000001D3`, `rwr pc 0x00000020`, `rwr sp 0x0000F000`, `con`.
 - Do not claim a step is working from compilation alone. A working step means the numbered Make target passed on real hardware and UART output was readable at 115200 baud.
+- For failure-path checks, at minimum verify one planned step target fails fast and one missing-artifact path reports a clear missing-file error without touching hardware.
 - Keep planned targets failing fast with "not implemented yet" until the hardware/firmware support is real.
 - When a step passes hardware, update README/AGENTS, commit only the relevant source/docs/generated hardware artifacts, then push. Do not include unrelated dirty files such as pre-existing bitstream/XSA changes unless the step intentionally changed hardware.
 

@@ -6,6 +6,8 @@ mount -t sysfs none /sys
 # when the initramfs itself is the root -- there's no separate "root" to
 # mount. Without this, /dev stays empty and cttyhack can't find the console.
 mount -t devtmpfs none /dev
+mkdir -p /dev/pts
+mount -t devpts none /dev/pts
 
 # Blank-password root login only -- see dropbear/localoptions.h and
 # AGENTS.md for why (no crypt() in the cross sysroot, and this is a local

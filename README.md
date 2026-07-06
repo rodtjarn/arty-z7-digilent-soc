@@ -130,6 +130,16 @@ cat /sys/class/net/eth0/carrier   # 1 once link is up
 
 See `AGENTS.md` for why U-Boot's own "No ethernet found" at boot is expected/harmless (only the kernel's Ethernet driver supports the PHY reset line on this board).
 
+#### 6. SSH
+
+**Confirmed working.** The initramfs runs a statically cross-compiled Dropbear SSH server, started automatically at boot. Once the board has an IP (see above), just:
+
+```
+ssh root@192.168.7.2   # or whatever IP the board has
+```
+
+No password, no prompt — logs straight in as root. This is a deliberate, minimal setup for an isolated test board only: blank-password login, and every image built from this repo shares the same SSH host key (see `AGENTS.md` for why, and for the caveats on both).
+
 ## Toolchain
 
 - Vivado / Vitis 2026.1

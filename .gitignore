@@ -71,3 +71,4 @@ linux/rootfs/uramdisk.image.gz
 linux/boot/BOOT.BIN
 linux/boot/boot.scr
 linux/.xlsclients-shim/
+linux/dropbear/src/

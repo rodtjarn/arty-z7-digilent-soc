@@ -7,6 +7,11 @@ mount -t sysfs none /sys
 # mount. Without this, /dev stays empty and cttyhack can't find the console.
 mount -t devtmpfs none /dev
 
+# Blank-password root login only -- see dropbear/localoptions.h and
+# AGENTS.md for why (no crypt() in the cross sysroot, and this is a local
+# test board, not something exposed to a real network).
+dropbear -B
+
 echo ""
 echo "Arty Z7-10 Linux boot test: reached userspace (initramfs shell)."
 echo ""

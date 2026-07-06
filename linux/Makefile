@@ -25,6 +25,7 @@ KERNEL_DTB   := kernel/src/arch/arm/boot/dts/xilinx/zynq-arty-z7.dtb
 RAMDISK      := rootfs/uramdisk.image.gz
 BOOTBIN      := boot/BOOT.BIN
 BOOTSCR      := boot/boot.scr
+DROPBEAR_BIN := dropbear/src/dropbear
 
 .PHONY: all
 all: $(FSBL_ELF) $(UBOOT_ELF) $(KERNEL_ZIMAGE) $(RAMDISK) $(BOOTBIN) $(BOOTSCR)
@@ -74,6 +75,39 @@ $(KERNEL_ZIMAGE) $(KERNEL_DTB) &: kernel/src
 	  $(MAKE) ARCH=arm CROSS_COMPILE=$(CROSS_COMPILE) xilinx_zynq_defconfig && \
 	  $(MAKE) ARCH=arm CROSS_COMPILE=$(CROSS_COMPILE) -j$$(nproc) zImage dtbs
 
+# --- Dropbear (SSH server for the initramfs) -------------------------------
+# Static build. The cross toolchain's sysroot has no libcrypt (no crypt.h,
+# no libcrypt.a) so `./configure`'s own crypt() detection would normally
+# disable DROPBEAR_SVR_PASSWORD_AUTH -- which also compiles out the -B
+# (blank password) option, since both are gated by the same feature flag
+# even though blank-password login never actually calls crypt(). Forcing
+# ac_cv_func_crypt=yes skips that detection and keeps -B available; the
+# crypt() symbol it still needs at link time comes from our own stub (see
+# dropbear/crypt_stub.c), not a real libcrypt. Login is blank password only
+# ("dropbear -B" in rootfs/init) -- suitable for this isolated test board
+# and nothing more. Host keys are pre-generated and committed in
+# dropbear/keys/ (native `dropbearkey`, run once) rather than built/generated
+# on every clone -- same host key on every image, which is fine for a local
+# test board but would not be for anything exposed to a real network.
+.PHONY: dropbear
+dropbear: $(DROPBEAR_BIN)
+
+dropbear/src:
+	git clone --depth 1 https://github.com/mkj/dropbear.git dropbear/src
+	cp dropbear/localoptions.h dropbear/src/localoptions.h
+	cp dropbear/crypt_stub.c dropbear/src/src/crypt_stub.c
+	sed -i 's/svr-authpam\.o/svr-authpam.o crypt_stub.o/' dropbear/src/Makefile.in
+
+$(DROPBEAR_BIN): dropbear/src
+	cd dropbear/src && \
+	  CC=$(CROSS_COMPILE)gcc ac_cv_func_crypt=yes \
+	  ./configure --host=arm-linux-gnueabihf --enable-static \
+	    --disable-zlib --disable-syslog --disable-lastlog --disable-utmp \
+	    --disable-utmpx --disable-wtmp --disable-wtmpx --disable-loginfunc \
+	    --disable-pututline --disable-pututxline && \
+	  $(MAKE) PROGRAMS="dropbear" -j$$(nproc)
+	$(CROSS_COMPILE)strip $(DROPBEAR_BIN)
+
 # --- Rootfs (BusyBox initramfs) -------------------------------------------
 .PHONY: rootfs
 rootfs: $(RAMDISK)
@@ -87,9 +121,9 @@ rootfs/src:
 rootfs/src/busybox: rootfs/src
 	cd rootfs/src && $(MAKE) ARCH=arm CROSS_COMPILE=$(CROSS_COMPILE) -j$$(nproc)
 
-$(RAMDISK): rootfs/src/busybox $(UBOOT_ELF)
+$(RAMDISK): rootfs/src/busybox $(UBOOT_ELF) $(DROPBEAR_BIN)
 	rm -rf rootfs/initramfs
-	mkdir -p rootfs/initramfs/{proc,sys,dev,tmp,root,mnt}
+	mkdir -p rootfs/initramfs/{proc,sys,dev,tmp,root,mnt,etc/dropbear}
 	cd rootfs/src && $(MAKE) ARCH=arm CROSS_COMPILE=$(CROSS_COMPILE) \
 	  CONFIG_PREFIX=$(CURDIR)/rootfs/initramfs install
 	cp rootfs/init rootfs/initramfs/init
@@ -97,6 +131,13 @@ $(RAMDISK): rootfs/src/busybox $(UBOOT_ELF)
 	mkdir -p rootfs/initramfs/usr/share/udhcpc
 	cp rootfs/src/examples/udhcp/simple.script rootfs/initramfs/usr/share/udhcpc/default.script
 	chmod +x rootfs/initramfs/usr/share/udhcpc/default.script
+	cp $(DROPBEAR_BIN) rootfs/initramfs/usr/sbin/dropbear
+	cp dropbear/keys/dropbear_rsa_host_key dropbear/keys/dropbear_ed25519_host_key \
+	  rootfs/initramfs/etc/dropbear/
+	chmod 600 rootfs/initramfs/etc/dropbear/dropbear_rsa_host_key \
+	  rootfs/initramfs/etc/dropbear/dropbear_ed25519_host_key
+	printf 'root::0:0:root:/root:/bin/sh\n' > rootfs/initramfs/etc/passwd
+	printf 'root:x:0:\n' > rootfs/initramfs/etc/group
 	cd rootfs/initramfs && \
 	  find . -print0 | bsdtar --null -cf - --format=newc -T - | gzip -9 > ../rootfs.cpio.gz
 	u-boot/src/tools/mkimage -A arm -O linux -T ramdisk -C gzip \
@@ -136,6 +177,7 @@ clean:
 	rm -rf u-boot/src u-boot/u-boot.elf
 	rm -rf kernel/src
 	rm -rf rootfs/src rootfs/initramfs rootfs/rootfs.cpio.gz rootfs/uramdisk.image.gz
+	rm -rf dropbear/src
 	rm -rf boot/BOOT.BIN boot/boot.scr
 	rm -rf $(XLSCLIENTS_SHIM)
 

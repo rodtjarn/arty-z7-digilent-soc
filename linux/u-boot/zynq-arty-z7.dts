@@ -1,0 +1,55 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Digilent Arty Z7-10 (xc7z010clg400-1)
+ *
+ * PS7 config matches Digilent's official Vivado board preset
+ * (arty-z7-10/A.0/preset.xml): DDR3 MT41J256M16 (512MB, 16-bit bus),
+ * UART0 on MIO 14..15, SD0 on MIO 40..45 with card detect on MIO 47.
+ */
+/dts-v1/;
+#include "zynq-7000.dtsi"
+
+/ {
+	model = "Digilent Arty Z7 board";
+	compatible = "digilentinc,zynq-arty-z7", "xlnx,zynq-7000";
+
+	aliases {
+		serial0 = &uart0;
+		mmc0 = &sdhci0;
+	};
+
+	memory@0 {
+		device_type = "memory";
+		reg = <0x0 0x20000000>;
+	};
+
+	chosen {
+		bootargs = "";
+		stdout-path = "serial0:115200n8";
+	};
+};
+
+&clkc {
+	/*
+	 * The Arty Z7 feeds PS_CLK from a 50 MHz oscillator (Digilent Arty Z7
+	 * Reference Manual, "Clock Sources"), not the 33.333 MHz assumed by
+	 * the upstream zynq-7000.dtsi default / other boards' overlays. Getting
+	 * this wrong doesn't stop the board from booting, but it makes U-Boot
+	 * (and the kernel) miscompute every PLL-derived clock from the live
+	 * SLCR registers, including the UART reference clock -- which garbles
+	 * the serial console the moment U-Boot reprograms the baud generator,
+	 * even though the FSBL's own ps7_init-programmed UART divisors (which
+	 * don't depend on this property) were already correct.
+	 */
+	ps-clk-frequency = <50000000>;
+};
+
+&sdhci0 {
+	bootph-all;
+	status = "okay";
+};
+
+&uart0 {
+	bootph-all;
+	status = "okay";
+};

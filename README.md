@@ -1,12 +1,12 @@
-# Arty Z7-10 SoC — Bare-Metal GPIO Test
+# Arty Z7-10 SoC — Bare-Metal GPIO Test + Linux Boot Test
 
-Bare-metal ARM Cortex-A9 firmware running on a Digilent Arty Z7-10, toggling LEDs via AXI GPIO — no OS, no FSBL, loaded directly over JTAG.
+Two independent tests on a Digilent Arty Z7-10: a bare-metal ARM Cortex-A9 GPIO blinker (no OS, no FSBL, loaded directly over JTAG — the default `make` target) and a full Linux boot from SD card (FSBL + U-Boot + kernel + BusyBox, built from source, running from DDR).
 
 ## Hardware
 
 - **Board**: Digilent Arty Z7-10 (Xilinx Zynq-7010)
 - **LEDs**: 4 user LEDs, active high (pins R14, P14, N16, M14)
-- **Boot mode**: JP4 in JTAG position
+- **Boot mode**: JP4 in JTAG position for the bare-metal test (below); SD position for the Linux boot test (see `linux/`)
 
 ## Quickstart
 
@@ -52,10 +52,70 @@ cd sw && make run
 
 This programs the SoC bitstream (unless it's unchanged and the FPGA is already configured), downloads the ELF over JTAG, initializes the PS, and starts execution. LEDs blink immediately. Note that `arty-z7-soc`'s `make program` only programs the FPGA fabric — it does not init the PS or load/run software, so use `sw`'s `make run` (or the top-level `make`, or `xsdb sw/run_gpio_test.tcl` directly) to actually see the test execute.
 
+### `linux/` — Linux boot from SD card
+
+Full boot chain built from source (no PetaLinux): FSBL, U-Boot, Linux kernel, and a minimal BusyBox initramfs, targeting the same `arty-z7-soc` hardware but running from DDR instead of OCM. **Confirmed working** on real hardware — boots to an interactive BusyBox shell over UART.
+
+#### 1. Host packages
+
+`bc` is required for the kernel build and is usually not installed by default:
+
+```
+sudo pacman -S bc   # or your distro's equivalent
+```
+
+`bsdtar` (from `libarchive`) is also required, to package the initramfs — see `AGENTS.md` if `cpio` isn't installed either.
+
+#### 2. Build the boot chain
+
+```
+cd linux && make all
+```
+
+Clones and builds U-Boot, the Linux kernel, and BusyBox from source (first run takes a while), then packages `BOOT.BIN` (FSBL + U-Boot) and `boot.scr` (U-Boot boot script).
+
+#### 3. Prepare the SD card
+
+Insert an SD card (8GB+) into a reader on your PC and identify its device node — **be certain you have the right device before formatting**, this is destructive:
+
+```
+lsblk    # find your card, e.g. /dev/sda — confirm size/model, don't guess
+```
+
+Format it as a single FAT32 partition (replace `/dev/sdX1` with your card's first partition):
+
+```
+sudo mkfs.vfat -F 32 -n BOOT /dev/sdX1
+```
+
+Mount it, then copy the boot files over:
+
+```
+make -C linux sdcard SDMNT=/path/to/mounted/fat32/partition
+```
+
+`sdcard` only copies files onto an **already-formatted, already-mounted** partition — it deliberately never touches a raw block device itself, so the format step above is on you.
+
+#### 4. Boot on hardware
+
+Can't be done over JTAG — needs physical access:
+
+1. Move jumper JP4 from JTAG to SD boot mode.
+2. Insert the prepared SD card into the board's microSD slot.
+3. Open a serial terminal at 115200 baud, 8N1, no flow control, on the board's *second* USB-serial port (the same USB cable used for JTAG also carries UART0 — the board's FTDI chip exposes both, typically `/dev/ttyUSB1` on Linux):
+   ```
+   picocom -b 115200 /dev/ttyUSB1
+   ```
+4. Power-cycle the board (or press the **PORB** button — confirmed to trigger a full reboot; **SRST** did not produce any UART output in testing, use PORB or a full power cycle instead).
+5. Watch U-Boot autoboot and the kernel boot to a `~ #` BusyBox shell.
+
+See `AGENTS.md` for the full boot-chain breakdown, the Digilent board-preset details that make this work (correct DDR part, SD0/UART0 MIO pins), and — importantly — the `ps-clk-frequency` device-tree fix that's required to get a readable (non-garbled) serial console.
+
 ## Toolchain
 
 - Vivado / Vitis 2026.1
-- `arm-none-eabi-gcc` (Xilinx GNU Toolchain, bundled with Vitis)
+- `arm-none-eabi-gcc` (Xilinx GNU Toolchain, bundled with Vitis) — bare-metal test
+- `arm-linux-gnueabihf-gcc` (Xilinx GNU Toolchain, bundled with Vitis) — Linux boot test
 
 ## Key JTAG Insight
 

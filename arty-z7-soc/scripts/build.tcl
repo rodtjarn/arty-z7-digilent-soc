@@ -18,10 +18,12 @@ create_bd_design design_1
 create_bd_cell -type ip -vlnv xilinx.com:ip:processing_system7:5.5 ps7
 apply_bd_automation -rule xilinx.com:bd_rule:processing_system7 -config {
     make_external "FIXED_IO, DDR"
+    apply_board_preset "1"
 } [get_bd_cells ps7]
 
 # Configure PS FCLK to 50 MHz for PL peripherals
 set_property -dict [list CONFIG.PCW_FPGA0_PERIPHERAL_FREQMHZ {50}] [get_bd_cells ps7]
+
 
 # Add AXI GPIO for LEDs (4-bit output)
 create_bd_cell -type ip -vlnv xilinx.com:ip:axi_gpio:2.0 axi_gpio_led

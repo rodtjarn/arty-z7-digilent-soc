@@ -7,15 +7,18 @@ MEMORY {
 SECTIONS {
     .text : {
         KEEP(*(.vectors))
-        *(.text)
+        *(.text.startup)
+        *(.text*)
+        *(.rodata*)
     } > ocm
 
     .data : {
-        *(.data)
+        *(.data*)
     } > ocm
 
-    .bss : {
-        *(.bss)
+    .bss (NOLOAD) : {
+        *(.bss*)
+        *(COMMON)
     } > ocm
 
     _stack_end = ORIGIN(ocm) + LENGTH(ocm);

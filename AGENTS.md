@@ -82,7 +82,12 @@ make clean
 
 ## Bare-Metal Software (sw/)
 
-GPIO test: sets LED GPIO as output, blinks 0xA ↔ 0x5 (~500 ms each). Static 0x1 or 0x2 = FAIL.
+UART-driven diagnostic suite loaded over JTAG into low OCM. UART0 is the primary debug path (115200 baud on the board's second USB-serial port), with LEDs kept as coarse stage/fail indicators and an OCM PASS/FAIL sentinel for the `xsdb` harness. Current tests:
+
+- AXI GPIO LED write/readback through the PL.
+- AXI GPIO button sampling; observed high/low masks are printed over UART.
+- ARM global timer sanity.
+- DDR memory at `0x00100000` using four 64 KiB pattern passes.
 
 ### Build
 
@@ -90,22 +95,56 @@ GPIO test: sets LED GPIO as output, blinks 0xA ↔ 0x5 (~500 ms each). Static 0x
 cd sw && make
 ```
 
-Requires ARM GCC in PATH, or set `CC` to the full path. Produces `gpio_test_low.elf` (use this for JTAG).
+Requires ARM GCC in PATH, or set `CC` to the full path. Produces `gpio_test_low.elf` (full suite), plus focused low-OCM ELFs for UART, DDR, GPIO, buttons, and timer.
 
 | File | Purpose |
 |------|---------|
-| `sw/gpio_test.c` | Main test: FCLK enable, LED/BTN GPIO config, blink loop with readback |
+| `sw/gpio_test.c` | Main test: UART reporting, FCLK enable, AXI GPIO, button sampling, ARM global timer, DDR pattern checks |
 | `sw/startup.s` | Reset vector + stack init (5 lines) |
-| `sw/lscript_low.ld` | **Use this**: OCM at `0x00000000` (JTAG boot alias), stack at `0x0000FFFC` |
+| `sw/lscript_low.ld` | **Use this**: OCM at `0x00000000` (JTAG boot alias), stack at `0x0000F000`, top OCM bytes reserved for harness status |
 | `sw/lscript.ld` | OCM at `0xFFFC0000` — DAP-blocked, cannot be used from xsdb |
 | `sw/run_gpio_test.tcl` | Complete xsdb script: program → download → init → run |
-| `sw/Makefile` | Builds both `gpio_test.elf` and `gpio_test_low.elf` |
+| `sw/Makefile` | Builds the full suite and focused test ELFs; exposes `step-01-*` through `step-10-*` targets |
 
 ### Run on Hardware
 
 ```
 xsdb sw/run_gpio_test.tcl
 ```
+
+Convenience targets:
+
+```
+cd sw && make run-uart   # UART-only smoke test, no PL/AXI dependency
+cd sw && make run-ddr    # DDR pattern test, reported over UART
+cd sw && make run-gpio   # AXI GPIO LED write/readback test
+cd sw && make run-buttons # AXI GPIO button sampling test
+cd sw && make run-timer  # ARM global timer sanity test
+cd sw && make run        # full UART + AXI GPIO + buttons + timer + DDR suite
+```
+
+Numbered step targets are also available from the repo root:
+
+| Step | Target | Status | Agent rule |
+|------|--------|--------|------------|
+| 1 | `make step-01-uart` | Working | Keep this independent of PL/AXI so UART can debug later failures |
+| 2 | `make step-02-ddr` | Working | Run from OCM after `ps7_init`; print every DDR pass over UART |
+| 3 | `make step-03-buttons` | Working | Report observed high/low masks over UART; do not require button presses for automation unless the target name says so |
+| 4 | `make step-04-timer` | Working | Use UART plus OCM sentinel; no silent LED-only status |
+| 5 | `make step-05-gic` | Planned | Do not mark working until an interrupt fires and returns cleanly on hardware |
+| 6 | `make step-06-axi-timer` | Planned | Do not add until the Vivado BD includes AXI Timer and the bitstream/XSA are intentionally updated |
+| 7 | `make step-07-custom-axi` | Planned | Include an ID register and scratch readback before testing behavior |
+| 8 | `make step-08-axi-bram` | Planned | Keep the BRAM address range documented and distinct from DDR |
+| 9 | `make step-09-cache-mmu` | Planned | MMIO must remain device/strongly ordered; rerun DDR and AXI tests after enabling caches |
+| 10 | `make step-10-sd-raw` | Planned | Keep this bare-metal SD0 only; do not rely on U-Boot/Linux helpers |
+
+Agent success rules for bare-metal steps:
+
+- Every new bare-metal test must print a UART banner/stage/fail line and write the OCM PASS/FAIL sentinel.
+- Preserve the JTAG order: `dow` before `ps7_init`, then `ps7_init`, `ps7_post_config`, `rwr cpsr 0x000001D3`, `rwr pc 0x00000020`, `rwr sp 0x0000F000`, `con`.
+- Do not claim a step is working from compilation alone. A working step means the numbered Make target passed on real hardware and UART output was readable at 115200 baud.
+- Keep planned targets failing fast with "not implemented yet" until the hardware/firmware support is real.
+- When a step passes hardware, update README/AGENTS, commit only the relevant source/docs/generated hardware artifacts, then push. Do not include unrelated dirty files such as pre-existing bitstream/XSA changes unless the step intentionally changed hardware.
 
 The script does exactly this, in this order:
 
@@ -114,7 +153,7 @@ The script does exactly this, in this order:
 3. Select `xc7z010` → `fpga arty_z7_soc.bit`
 4. Back to ARM core → **`dow gpio_test_low.elf`** (loads to `0x00000000`)
 5. `source ps7_init.tcl` → `ps7_init` → `ps7_post_config`
-6. `rwr pc 0x00000020; rwr sp 0x0000FFFC; con`
+6. `rwr cpsr 0x000001D3; rwr pc 0x00000020; rwr sp 0x0000F000; con` — force ARM SVC mode before jumping into ARM-state startup code; a halted core may otherwise retain Thumb state from BootROM/ROM handlers and immediately vector off into high OCM.
 
 ### Critical JTAG Rules
 

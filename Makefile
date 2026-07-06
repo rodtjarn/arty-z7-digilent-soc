@@ -3,7 +3,10 @@
 # Makefiles' own file-based dependency checks, then always programs and runs on
 # hardware.
 
-.PHONY: all build run clean help linux-boot
+.PHONY: all build run clean help linux-boot \
+	step-01-uart step-02-ddr step-03-buttons step-04-timer step-05-gic \
+	step-06-axi-timer step-07-custom-axi step-08-axi-bram \
+	step-09-cache-mmu step-10-sd-raw steps-working
 
 all: run
 
@@ -18,6 +21,39 @@ build:
 # UART) needed to actually boot it on hardware.
 linux-boot:
 	$(MAKE) -C linux all
+
+step-01-uart:
+	$(MAKE) -C sw step-01-uart
+
+step-02-ddr:
+	$(MAKE) -C sw step-02-ddr
+
+step-03-buttons:
+	$(MAKE) -C sw step-03-buttons
+
+step-04-timer:
+	$(MAKE) -C sw step-04-timer
+
+step-05-gic:
+	$(MAKE) -C sw step-05-gic
+
+step-06-axi-timer:
+	$(MAKE) -C sw step-06-axi-timer
+
+step-07-custom-axi:
+	$(MAKE) -C sw step-07-custom-axi
+
+step-08-axi-bram:
+	$(MAKE) -C sw step-08-axi-bram
+
+step-09-cache-mmu:
+	$(MAKE) -C sw step-09-cache-mmu
+
+step-10-sd-raw:
+	$(MAKE) -C sw step-10-sd-raw
+
+steps-working:
+	$(MAKE) -C sw steps-working
 
 # Programs the bitstream, downloads the ELF, inits the PS, and runs the test.
 # Programming and running can't be split into separate Make targets: the ELF
@@ -40,4 +76,9 @@ help:
 	@echo "  build      - Build bitstream and ELF only, skipping steps already up to date"
 	@echo "  run        - Same as 'all'"
 	@echo "  linux-boot - Build the Linux-boot-from-SD-card test (see linux/README)"
+	@echo "  step-01-uart      - Run bare-metal UART smoke test"
+	@echo "  step-02-ddr       - Run bare-metal DDR pattern test"
+	@echo "  step-03-buttons   - Run bare-metal button sampling test"
+	@echo "  step-04-timer     - Run bare-metal ARM global timer test"
+	@echo "  steps-working     - Run all implemented step tests"
 	@echo "  clean      - Clean hw and sw build artifacts"

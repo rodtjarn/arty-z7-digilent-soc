@@ -2,8 +2,12 @@
 
 set bit_file  [file normalize [file join [file dirname [info script]] \
     "../arty-z7-soc/hw/arty_z7_soc.bit"]]
-set elf_file  [file normalize [file join [file dirname [info script]] \
-    "gpio_test_low.elf"]]
+if {[info exists ::env(TEST_ELF)]} {
+    set elf_file [file normalize [file join [file dirname [info script]] $::env(TEST_ELF)]]
+} else {
+    set elf_file [file normalize [file join [file dirname [info script]] \
+        "gpio_test_low.elf"]]
+}
 set ps7_init  [file normalize [file join [file dirname [info script]] \
     "../arty-z7-soc/hw/ps7_init.tcl"]]
 set stamp_file [file normalize [file join [file dirname [info script]] \
@@ -79,23 +83,32 @@ puts "ps7_init done"
 ps7_post_config
 puts "ps7_post_config done (PS-PL level shifters enabled)"
 
-# Set PC to entry point and SP to top of OCM
+# Set PC to _start, immediately after the 32-byte vector table.
 set entry 0x00000020
-set sp    0x0000FFFC
+set sp    0x0000F000
+rwr cpsr 0x000001D3
 rwr pc $entry
 rwr sp $sp
-puts [format "PC=0x%08X  SP=0x%08X" $entry $sp]
+puts [format "CPSR=0x000001D3  PC=0x%08X  SP=0x%08X" $entry $sp]
 
 # RESULT_ADDR lives in OCM outside the downloaded ELF image, so it isn't reset by
 # `dow` and still holds whatever a *previous* run left there. Clear it here, with
 # the core halted, instead of relying on the target's own early clear in main() --
 # otherwise the first poll below can race that clear and read a stale PASS/FAIL
 # from the prior run, reporting success in milliseconds with no test actually run.
-set result_addr 0x00001000
+set result_addr   0x0000FFE0
+set stage_addr    0x0000FFE4
+set detail_addr   0x0000FFE8
+set expected_addr 0x0000FFEC
+set actual_addr   0x0000FFF0
 mwr $result_addr 0
+mwr $stage_addr 0
+mwr $detail_addr 0
+mwr $expected_addr 0
+mwr $actual_addr 0
 puts "Cleared stale result sentinel at [format 0x%08X $result_addr]"
 
-puts "Running... (LEDs blink 0xA<->0x5 for 10 iterations)"
+puts "Running bare-metal diagnostic suite..."
 con
 
 # gpio_test.c writes a sentinel to RESULT_ADDR once it finishes: RESULT_PASS after
@@ -123,11 +136,18 @@ while {$elapsed_ms < $timeout_ms} {
 
 stop
 puts "Core halted"
+puts "Stopped [string trim [rrd pc]]  [string trim [rrd cpsr]]"
 
 if {$result eq "PASS"} {
     puts "TEST PASSED"
 } elseif {$result eq "FAIL"} {
-    puts "TEST FAILED"
+    set stage    [mrd -value $stage_addr]
+    set detail   [mrd -value $detail_addr]
+    set expected [mrd -value $expected_addr]
+    set actual   [mrd -value $actual_addr]
+    puts [format "TEST FAILED stage/code=0x%08X detail=0x%08X expected=0x%08X actual=0x%08X" $stage $detail $expected $actual]
 } else {
-    puts "TEST FAILED (timed out waiting for result after ${timeout_ms}ms)"
+    set stage [mrd -value $stage_addr]
+    set detail [mrd -value $detail_addr]
+    puts [format "TEST FAILED (timed out waiting for result after ${timeout_ms}ms, stage/code=0x%08X detail=0x%08X)" $stage $detail]
 }

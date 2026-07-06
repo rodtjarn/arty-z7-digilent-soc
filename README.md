@@ -1,6 +1,6 @@
-# Arty Z7-10 SoC — Bare-Metal GPIO Test + Linux Boot Test
+# Arty Z7-10 SoC — Bare-Metal Diagnostic + Linux Boot Test
 
-Two independent tests on a Digilent Arty Z7-10: a bare-metal ARM Cortex-A9 GPIO blinker (no OS, no FSBL, loaded directly over JTAG — the default `make` target) and a full Linux boot from SD card (FSBL + U-Boot + kernel + BusyBox, built from source, running from DDR).
+Two independent tests on a Digilent Arty Z7-10: a bare-metal ARM Cortex-A9 diagnostic suite (no OS, no FSBL, loaded directly over JTAG — the default `make` target) and a full Linux boot from SD card (FSBL + U-Boot + kernel + BusyBox, built from source, running from DDR).
 
 ## Hardware
 
@@ -15,6 +15,17 @@ make
 ```
 
 Builds the `arty-z7-soc` bitstream and `sw` firmware if their sources changed (skipped otherwise), then programs and runs on hardware. Requires `hw_server` running and the board connected over JTAG. The PL bitstream flash itself is also skipped when the bitstream is unchanged and the FPGA already reports configured (checked live via `xsdb`, not just a timestamp) — everything else (ELF download, PS init, test execution) always runs. See `make help` for other targets (`build`, `clean`).
+
+For step-by-step bare-metal diagnostics, keep a serial terminal open at 115200 baud on `/dev/ttyUSB1`, then run the numbered targets from the repo root:
+
+```
+make step-01-uart
+make step-02-ddr
+make step-03-buttons
+make step-04-timer
+```
+
+`make steps-working` runs all currently implemented numbered steps.
 
 ## Projects
 
@@ -36,9 +47,16 @@ cd arty-z7-soc && make all && make program
 
 Pre-built bitstream and XSA are committed in `arty-z7-soc/hw/`.
 
-### `sw/` — Bare-metal GPIO test
+### `sw/` — Bare-metal diagnostic suite
 
-Runs on ARM Cortex-A9 core #0 from on-chip SRAM (OCM). Blinks LEDs in a 0xA ↔ 0x5 pattern (~500 ms each). Static 0x1 or 0x2 indicates a readback failure.
+Runs on ARM Cortex-A9 core #0 from on-chip SRAM (OCM). UART0 is the primary debug channel, so keep a 115200 baud serial terminal open on the board's second USB-serial port while running tests. The suite currently reports each stage over UART and tests:
+
+- AXI GPIO LED write/readback through the PL.
+- AXI GPIO button sampling, with observed high/low masks printed over UART.
+- ARM global timer sanity.
+- DDR memory at `0x00100000` using four 64 KiB pattern passes.
+
+The LEDs show coarse stage/fail state, and the `xsdb` harness still polls an OCM PASS/FAIL sentinel so automation does not depend on watching UART manually.
 
 ```
 cd sw && make
@@ -50,7 +68,37 @@ cd sw && make
 cd sw && make run
 ```
 
-This programs the SoC bitstream (unless it's unchanged and the FPGA is already configured), downloads the ELF over JTAG, initializes the PS, and starts execution. LEDs blink immediately. Note that `arty-z7-soc`'s `make program` only programs the FPGA fabric — it does not init the PS or load/run software, so use `sw`'s `make run` (or the top-level `make`, or `xsdb sw/run_gpio_test.tcl` directly) to actually see the test execute.
+This programs the SoC bitstream (unless it's unchanged and the FPGA is already configured), downloads the ELF over JTAG, initializes the PS, and starts execution. Watch UART0 at 115200 baud for detailed stage output; LEDs show coarse progress/fail state. Note that `arty-z7-soc`'s `make program` only programs the FPGA fabric — it does not init the PS or load/run software, so use `sw`'s `make run` (or the top-level `make`, or `xsdb sw/run_gpio_test.tcl` directly) to actually see the test execute.
+
+Focused targets are also available:
+
+```
+cd sw && make run-uart   # UART-only smoke test, no PL/AXI dependency
+cd sw && make run-ddr    # DDR pattern test, reported over UART
+cd sw && make run-gpio   # AXI GPIO LED write/readback test
+cd sw && make run-buttons # AXI GPIO button sampling test
+cd sw && make run-timer  # ARM global timer sanity test
+cd sw && make run        # full UART + AXI GPIO + buttons + timer + DDR suite
+```
+
+#### Bare-metal 10-step plan
+
+Run these from the repo root. Every implemented step reports progress over UART and also writes the OCM PASS/FAIL sentinel used by the `xsdb` harness.
+
+| Step | Target | Status | What it proves |
+|------|--------|--------|----------------|
+| 1 | `make step-01-uart` | Working | UART0 output is readable at 115200 baud after `ps7_init` |
+| 2 | `make step-02-ddr` | Working | DDR is usable from OCM-loaded bare-metal code; four 64 KiB pattern passes at `0x00100000` |
+| 3 | `make step-03-buttons` | Working | PS-to-PL AXI GPIO can sample the four user buttons and report observed high/low masks |
+| 4 | `make step-04-timer` | Working | ARM global timer counts while bare-metal code runs |
+| 5 | `make step-05-gic` | Planned | GIC setup and interrupt entry/return, likely first with an ARM private timer interrupt |
+| 6 | `make step-06-axi-timer` | Planned | AXI Timer IP in PL over `M_AXI_GP0`, first polled and then interrupt-driven |
+| 7 | `make step-07-custom-axi` | Planned | Custom AXI-Lite register block with ID/scratch/counter registers |
+| 8 | `make step-08-axi-bram` | Planned | AXI BRAM controller memory-pattern test through PS-to-PL AXI |
+| 9 | `make step-09-cache-mmu` | Planned | MMU/cache enable smoke test without breaking DDR or AXI MMIO |
+| 10 | `make step-10-sd-raw` | Planned | Bare-metal SD0 raw-sector read without U-Boot or Linux |
+
+Planned targets intentionally fail fast with a clear "not implemented yet" message until their firmware/hardware support exists.
 
 ### `linux/` — Linux boot from SD card
 

@@ -141,6 +141,17 @@ make -C linux sdcard SDMNT=/path/to/mounted/fat32/partition
 
 `sdcard` only copies files onto an **already-formatted, already-mounted** FAT32 partition (`SDMNT` must be a mountpoint, not a raw device) — partitioning/formatting the card is left to the user, deliberately, since scripting writes to a raw block device is destructive if the wrong device is picked.
 
+### Boot Sequence (BootROM → FSBL → U-Boot → kernel)
+
+1. Power-on reset latches the JP4 jumper state into an SLCR mode register, telling BootROM this is SD boot mode. (A later SRST reruns BootROM but reuses the already-latched value — JP4 changes need a real power cycle to take effect, not just SRST.)
+2. **BootROM** (silicon-masked ROM, immutable, not user code, no JTAG involved in SD boot mode) does minimal SD controller setup, reads `BOOT.BIN`'s boot header off the SD card, and copies the FSBL partition into OCM (256KB on-chip SRAM) — the only memory usable this early, since DDR isn't configured yet. It then jumps to the FSBL's entry point in OCM.
+3. **FSBL** runs entirely from OCM. Its first job is `ps7_init()` (`arty-z7-soc/hw/ps7_init.c`): PLLs, peripheral clocks, MIO pinmux, and — critically — DDR3 controller/PHY calibration against the board's actual DDR chips. Only after this completes does DDR become valid memory for the first time in the boot.
+4. FSBL then reads `u-boot.elf` off the SD card and copies it into DDR (U-Boot doesn't fit in the 256KB OCM), and jumps to U-Boot's entry point *in DDR*. FSBL/OCM's job is done at this point — nothing after this uses OCM again.
+5. **U-Boot**, running from DDR, autoboots `boot.scr`, which `fatload`s `zImage`, `devicetree.dtb`, and `uramdisk.image.gz` off the SD card into fixed DDR addresses (observed in practice: kernel `@ 0x200000`, FDT `@ 0x1000000`, ramdisk `@ 0x2000000`), then `bootz` jumps into the kernel entry point, also in DDR.
+6. **Kernel**, running from DDR, unpacks the initramfs cpio archive directly into a DDR-backed rootfs and execs `/init` (PID 1) — reaching the `~ #` shell.
+
+Note: SD (and QSPI, an unused third boot mode on this board) is never memory-mapped or executed in place — BootROM/FSBL/U-Boot each treat it purely as a block/file device to *copy* bytes from. OCM and DDR are the only two places anything ever actually executes; the whole point of stage 0–1 is bridging "only OCM is usable" to "DDR is finally ready."
+
 | File | Purpose |
 |------|---------|
 | `linux/fsbl/build_fsbl.py` | Vitis Python-client script: creates a platform from `arty-z7-soc/hw/arty_z7_soc.xsa` and builds the FSBL (`fsbl/fsbl.elf`) |

@@ -22,10 +22,26 @@ startup.o: startup.s
 gpio_test.bin: gpio_test.elf
 	$(OBJCOPY) -O binary $< $@
 
-run: gpio_test_low.elf
+run: gpio_test_low.elf hw_server
 	xsdb run_gpio_test.tcl
+
+# Start hw_server in the background if nothing is already listening on its
+# default port. It's a long-lived daemon meant to be reused across many
+# run/debug sessions, so we only launch it here rather than tying its
+# lifecycle to this target.
+hw_server:
+	@if ! (exec 3<>/dev/tcp/localhost/3121) 2>/dev/null; then \
+		echo "Starting hw_server..."; \
+		nohup hw_server >/tmp/hw_server.log 2>&1 & disown; \
+		for i in $$(seq 1 20); do \
+			(exec 3<>/dev/tcp/localhost/3121) 2>/dev/null && exit 0; \
+			sleep 0.5; \
+		done; \
+		echo "hw_server did not come up, see /tmp/hw_server.log" >&2; \
+		exit 1; \
+	fi
 
 clean:
 	rm -f *.o *.elf *.bin gpio_test_low.elf
 
-.PHONY: all clean run
+.PHONY: all clean run hw_server

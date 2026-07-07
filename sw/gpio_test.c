@@ -3,6 +3,13 @@
 #define GPIO_DATA         0x00u
 #define GPIO_TRI          0x04u
 
+#define AXI_TIMER_BASE    0x42800000u
+#define AXI_TIMER_TCSR0   0x00u
+#define AXI_TIMER_TLR0    0x04u
+#define AXI_TIMER_TCR0    0x08u
+#define AXI_TIMER_CSR_LOAD 0x20u
+#define AXI_TIMER_CSR_ENT 0x80u
+
 #define UART0_BASE        0xE0000000u
 #define UART_CR           0x00u
 #define UART_SR           0x2Cu
@@ -56,6 +63,7 @@
 #define TEST_MODE_TIMER   4
 #define TEST_MODE_GPIO    5
 #define TEST_MODE_GIC     6
+#define TEST_MODE_AXI_TIMER 7
 
 #ifndef TEST_MODE
 #define TEST_MODE TEST_MODE_FULL
@@ -81,8 +89,10 @@
 #define STAGE_DONE        0x00000006u
 #define STAGE_UART        0x00000007u
 #define STAGE_GIC         0x00000008u
+#define STAGE_AXI_TIMER   0x00000009u
 
 #define FAIL_AXI_DATA     0x00000102u
+#define FAIL_AXI_TIMER_STUCK 0x00000202u
 #define FAIL_TIMER_STUCK  0x00000301u
 #define FAIL_DDR_PATTERN  0x00000401u
 #define FAIL_GIC_NO_IRQ   0x00000501u
@@ -357,6 +367,34 @@ static void test_gic_private_timer(void) {
     }
 }
 
+static void test_axi_timer(void) {
+    u32 start;
+    u32 end;
+
+    stage(STAGE_AXI_TIMER, "axi timer polled count");
+
+    REG32(AXI_TIMER_BASE + AXI_TIMER_TCSR0) = 0u;
+    REG32(AXI_TIMER_BASE + AXI_TIMER_TLR0) = 0u;
+    REG32(AXI_TIMER_BASE + AXI_TIMER_TCSR0) = AXI_TIMER_CSR_LOAD;
+    REG32(AXI_TIMER_BASE + AXI_TIMER_TCSR0) = 0u;
+
+    start = REG32(AXI_TIMER_BASE + AXI_TIMER_TCR0);
+    REG32(AXI_TIMER_BASE + AXI_TIMER_TCSR0) = AXI_TIMER_CSR_ENT;
+    delay(1000000u);
+    end = REG32(AXI_TIMER_BASE + AXI_TIMER_TCR0);
+    REG32(AXI_TIMER_BASE + AXI_TIMER_TCSR0) = 0u;
+
+    uart_puts("axi_timer start=");
+    uart_hex32(start);
+    uart_puts(" end=");
+    uart_hex32(end);
+    uart_puts("\n");
+
+    if (end <= start || (end - start) < 100u) {
+        fail(FAIL_AXI_TIMER_STUCK, start, end);
+    }
+}
+
 static u32 ddr_pattern(u32 index, u32 pass_index) {
     switch (pass_index) {
     case 0u:
@@ -428,6 +466,10 @@ int main(void) {
     stage(STAGE_GIC, "gic-only mode");
     test_gic_private_timer();
     pass();
+#elif TEST_MODE == TEST_MODE_AXI_TIMER
+    stage(STAGE_AXI_TIMER, "axi-timer-only mode");
+    test_axi_timer();
+    pass();
 #else
     init_pl_gpio();
     stage(STAGE_BOOT, "boot");
@@ -435,6 +477,7 @@ int main(void) {
     test_buttons();
     test_global_timer();
     test_gic_private_timer();
+    test_axi_timer();
     test_ddr();
     pass();
 #endif

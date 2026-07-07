@@ -24,6 +24,7 @@ make step-02-ddr
 make step-03-buttons
 make step-04-timer
 make step-05-gic
+make step-06-axi-timer
 ```
 
 `make steps-working` runs all currently implemented numbered steps.
@@ -41,9 +42,9 @@ Pure RTL design (no PS). 8-bit binary counter drives the 4 LEDs at ~1 step/secon
 cd arty-z7-counter && make all && make program
 ```
 
-### `arty-z7-soc/` — Zynq SoC with AXI GPIO
+### `arty-z7-soc/` — Zynq SoC with AXI GPIO + AXI Timer
 
-Zynq PS7 + AXI GPIO block design. Exposes LEDs at `0x41200000` and buttons at `0x41210000`.
+Zynq PS7 + AXI GPIO + AXI Timer block design. Exposes LEDs at `0x41200000`, buttons at `0x41210000`, and AXI Timer 0 at `0x42800000`.
 
 ```
 cd arty-z7-soc && make all && make program
@@ -58,6 +59,8 @@ Runs on ARM Cortex-A9 core #0 from on-chip SRAM (OCM). UART0 is the primary debu
 - AXI GPIO LED write/readback through the PL.
 - AXI GPIO button sampling, with observed high/low masks printed over UART.
 - ARM global timer sanity.
+- GIC interrupt delivery using the Cortex-A9 private timer.
+- AXI Timer PL peripheral counting over PS `M_AXI_GP0`.
 - DDR memory at `0x00100000` using four 64 KiB pattern passes.
 
 The LEDs show coarse stage/fail state, and the `xsdb` harness still polls an OCM PASS/FAIL sentinel so automation does not depend on watching UART manually.
@@ -83,7 +86,8 @@ cd sw && make run-gpio   # AXI GPIO LED write/readback test
 cd sw && make run-buttons # AXI GPIO button sampling test
 cd sw && make run-timer  # ARM global timer sanity test
 cd sw && make run-gic    # GIC/private timer interrupt test
-cd sw && make run        # full UART + AXI GPIO + buttons + timer + DDR suite
+cd sw && make run-axi-timer # AXI Timer PL peripheral test
+cd sw && make run        # full UART + AXI GPIO + buttons + timer + GIC + AXI Timer + DDR suite
 cd sw && make regress-baremetal # all implemented tests with summary
 ```
 
@@ -98,7 +102,7 @@ Run these from the repo root. Every implemented step reports progress over UART 
 | 3 | `make step-03-buttons` | Working | PS-to-PL AXI GPIO can sample the four user buttons and report observed high/low masks |
 | 4 | `make step-04-timer` | Working | ARM global timer counts while bare-metal code runs |
 | 5 | `make step-05-gic` | Working | GIC setup and IRQ entry/return using Cortex-A9 private timer interrupt ID 29 |
-| 6 | `make step-06-axi-timer` | Planned | AXI Timer IP in PL over `M_AXI_GP0`, first polled and then interrupt-driven |
+| 6 | `make step-06-axi-timer` | Working | AXI Timer IP in PL at `0x42800000` counts when accessed over PS `M_AXI_GP0` |
 | 7 | `make step-07-custom-axi` | Planned | Custom AXI-Lite register block with ID/scratch/counter registers |
 | 8 | `make step-08-axi-bram` | Planned | AXI BRAM controller memory-pattern test through PS-to-PL AXI |
 | 9 | `make step-09-cache-mmu` | Planned | MMU/cache enable smoke test without breaking DDR or AXI MMIO |
@@ -112,7 +116,7 @@ For a board-level smoke regression, use:
 make regress-baremetal
 ```
 
-This runs UART, DDR, GPIO, buttons, timer, GIC, and the full suite. It reports each implemented test as `PASS` or `FAIL`, reports steps 6-10 as `SKIP` until implemented, and exits nonzero if any implemented test fails.
+This runs UART, DDR, GPIO, buttons, timer, GIC, AXI Timer, and the full suite. It reports each implemented test as `PASS` or `FAIL`, reports steps 7-10 as `SKIP` until implemented, and exits nonzero if any implemented test fails.
 
 ### `linux/` — Linux boot from SD card
 

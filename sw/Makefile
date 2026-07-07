@@ -8,7 +8,8 @@ PS7_INIT := ../arty-z7-soc/hw/ps7_init.tcl
 
 all: gpio_test.elf gpio_test.bin gpio_test_low.elf \
 	gpio_test_uart_low.elf gpio_test_ddr_low.elf gpio_test_gpio_low.elf \
-	gpio_test_buttons_low.elf gpio_test_timer_low.elf gpio_test_gic_low.elf
+	gpio_test_buttons_low.elf gpio_test_timer_low.elf gpio_test_gic_low.elf \
+	gpio_test_axi_timer_low.elf
 
 gpio_test.elf: gpio_test.o startup.o
 	$(LD) $(LFLAGS) -Wl,-T,lscript.ld $^ -o $@
@@ -35,6 +36,9 @@ gpio_test_timer_low.elf: gpio_test_timer.o startup.o
 gpio_test_gic_low.elf: gpio_test_gic.o startup.o
 	$(LD) $(LFLAGS) -Wl,-T,lscript_low.ld $^ -o $@
 
+gpio_test_axi_timer_low.elf: gpio_test_axi_timer.o startup.o
+	$(LD) $(LFLAGS) -Wl,-T,lscript_low.ld $^ -o $@
+
 gpio_test.o: gpio_test.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -55,6 +59,9 @@ gpio_test_timer.o: gpio_test.c
 
 gpio_test_gic.o: gpio_test.c
 	$(CC) $(CFLAGS) -DTEST_MODE=TEST_MODE_GIC -c $< -o $@
+
+gpio_test_axi_timer.o: gpio_test.c
+	$(CC) $(CFLAGS) -DTEST_MODE=TEST_MODE_AXI_TIMER -c $< -o $@
 
 startup.o: startup.s
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -83,15 +90,15 @@ run-timer: gpio_test_timer_low.elf check-hw-artifacts hw_server
 run-gic: gpio_test_gic_low.elf check-hw-artifacts hw_server
 	TEST_ELF=gpio_test_gic_low.elf xsdb run_gpio_test.tcl
 
+run-axi-timer: gpio_test_axi_timer_low.elf check-hw-artifacts hw_server
+	TEST_ELF=gpio_test_axi_timer_low.elf xsdb run_gpio_test.tcl
+
 step-01-uart: run-uart
 step-02-ddr: run-ddr
 step-03-buttons: run-buttons
 step-04-timer: run-timer
 step-05-gic: run-gic
-
-step-06-axi-timer:
-	@echo "Step 06 AXI Timer PL peripheral test is not implemented yet." >&2
-	@exit 2
+step-06-axi-timer: run-axi-timer
 
 step-07-custom-axi:
 	@echo "Step 07 custom AXI-Lite peripheral test is not implemented yet." >&2
@@ -109,7 +116,7 @@ step-10-sd-raw:
 	@echo "Step 10 bare-metal SD raw-sector read test is not implemented yet." >&2
 	@exit 2
 
-steps-working: step-01-uart step-02-ddr step-03-buttons step-04-timer step-05-gic
+steps-working: step-01-uart step-02-ddr step-03-buttons step-04-timer step-05-gic step-06-axi-timer
 
 regress-baremetal: all check-hw-artifacts hw_server
 	@failures=0; total=0; results=""; \
@@ -130,10 +137,10 @@ regress-baremetal: all check-hw-artifacts hw_server
 	run_test "step-03-buttons" "run-buttons"; \
 	run_test "step-04-timer" "run-timer"; \
 	run_test "step-05-gic" "run-gic"; \
+	run_test "step-06-axi-timer" "run-axi-timer"; \
 	run_test "full-suite" "run"; \
 	printf '\n=== Bare-metal regression summary ===\n'; \
 	printf '%b' "$$results"; \
-	printf 'SKIP step-06-axi-timer (not implemented)\n'; \
 	printf 'SKIP step-07-custom-axi (not implemented)\n'; \
 	printf 'SKIP step-08-axi-bram (not implemented)\n'; \
 	printf 'SKIP step-09-cache-mmu (not implemented)\n'; \
@@ -171,6 +178,7 @@ clean:
 	rm -f *.o *.elf *.bin
 
 .PHONY: all clean run run-uart run-ddr run-gpio run-buttons run-timer run-gic \
+	run-axi-timer \
 	step-01-uart step-02-ddr step-03-buttons step-04-timer step-05-gic \
 	step-06-axi-timer step-07-custom-axi step-08-axi-bram \
 	step-09-cache-mmu step-10-sd-raw steps-working regress-baremetal \

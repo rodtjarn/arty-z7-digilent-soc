@@ -56,7 +56,7 @@ make clean
 
 ## Zynq SoC (arty-z7-soc/)
 
-Zynq PS7 + AXI GPIO: 4-bit LED output at `0x41200000`, 4-bit button input at `0x41210000`.
+Zynq PS7 + AXI GPIO + AXI Timer: 4-bit LED output at `0x41200000`, 4-bit button input at `0x41210000`, AXI Timer 0 at `0x42800000`.
 
 ```
 make all      # create BD, generate targets, synth, impl, bitstream + XSA
@@ -121,7 +121,8 @@ cd sw && make run-gpio   # AXI GPIO LED write/readback test
 cd sw && make run-buttons # AXI GPIO button sampling test
 cd sw && make run-timer  # ARM global timer sanity test
 cd sw && make run-gic    # GIC/private timer interrupt test
-cd sw && make run        # full UART + AXI GPIO + buttons + timer + DDR suite
+cd sw && make run-axi-timer # AXI Timer PL peripheral test
+cd sw && make run        # full UART + AXI GPIO + buttons + timer + GIC + AXI Timer + DDR suite
 cd sw && make regress-baremetal # all implemented tests with summary
 ```
 
@@ -134,7 +135,7 @@ Numbered step targets are also available from the repo root:
 | 3 | `make step-03-buttons` | Working | Report observed high/low masks over UART; do not require button presses for automation unless the target name says so |
 | 4 | `make step-04-timer` | Working | Use UART plus OCM sentinel; no silent LED-only status |
 | 5 | `make step-05-gic` | Working | Uses Cortex-A9 private timer interrupt ID 29; keep IRQ entry in low vectors and initialize IRQ mode stack before enabling IRQs |
-| 6 | `make step-06-axi-timer` | Planned | Do not add until the Vivado BD includes AXI Timer and the bitstream/XSA are intentionally updated |
+| 6 | `make step-06-axi-timer` | Working | AXI Timer is mapped at `0x42800000`; keep the Vivado BD, committed bitstream/XSA, and firmware address constants in sync |
 | 7 | `make step-07-custom-axi` | Planned | Include an ID register and scratch readback before testing behavior |
 | 8 | `make step-08-axi-bram` | Planned | Keep the BRAM address range documented and distinct from DDR |
 | 9 | `make step-09-cache-mmu` | Planned | MMIO must remain device/strongly ordered; rerun DDR and AXI tests after enabling caches |
@@ -148,6 +149,7 @@ Agent success rules for bare-metal steps:
 - Do not claim a step is working from compilation alone. A working step means the numbered Make target passed on real hardware and UART output was readable at 115200 baud.
 - For failure-path checks, at minimum verify one planned step target fails fast and one missing-artifact path reports a clear missing-file error without touching hardware.
 - `make regress-baremetal` must keep running after an implemented test fails, print a final PASS/FAIL/SKIP summary, and exit nonzero if any implemented test failed.
+- Step 06 is a polled AXI Timer test. Do not convert it to depend on interrupt wiring until the BD deliberately connects `axi_timer_0/interrupt` and the GIC mapping is documented/tested.
 - Keep planned targets failing fast with "not implemented yet" until the hardware/firmware support is real.
 - When a step passes hardware, update README/AGENTS, commit only the relevant source/docs/generated hardware artifacts, then push. Do not include unrelated dirty files such as pre-existing bitstream/XSA changes unless the step intentionally changed hardware.
 

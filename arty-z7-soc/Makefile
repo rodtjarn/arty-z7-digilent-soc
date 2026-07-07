@@ -1,4 +1,4 @@
-# Arty Z7-10 SoC build system (Zynq PS + AXI GPIO + AXI Timer + custom AXI-Lite)
+# Arty Z7-10 SoC build system (Zynq PS + AXI GPIO + AXI Timer + custom AXI-Lite + AXI BRAM)
 VIVADO      := vivado
 SCRIPT_DIR  := scripts
 SRC_DIR     := src

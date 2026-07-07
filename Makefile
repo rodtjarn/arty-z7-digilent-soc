@@ -43,7 +43,7 @@ step-06-axi-timer: build
 step-07-custom-axi: build
 	$(MAKE) -C sw step-07-custom-axi
 
-step-08-axi-bram:
+step-08-axi-bram: build
 	$(MAKE) -C sw step-08-axi-bram
 
 step-09-cache-mmu:
@@ -86,6 +86,7 @@ help:
 	@echo "  step-05-gic       - Run bare-metal GIC private timer IRQ test"
 	@echo "  step-06-axi-timer - Run bare-metal AXI Timer PL peripheral test"
 	@echo "  step-07-custom-axi - Run bare-metal custom AXI-Lite register test"
+	@echo "  step-08-axi-bram  - Run bare-metal AXI BRAM memory-pattern test"
 	@echo "  steps-working     - Run all implemented step tests"
 	@echo "  regress-baremetal - Run implemented bare-metal regression tests with summary"
 	@echo "  clean      - Clean hw and sw build artifacts"

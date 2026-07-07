@@ -1,4 +1,4 @@
-# Build script for Arty Z7-10 SoC with PS + AXI GPIO + AXI Timer + custom AXI-Lite
+# Build script for Arty Z7-10 SoC with PS + AXI GPIO + AXI Timer + custom AXI-Lite + AXI BRAM
 
 set project_dir [file normalize "../hw"]
 set src_dir     [file normalize "../src"]
@@ -50,6 +50,13 @@ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_timer:2.0 axi_timer_0
 # Add a small custom AXI-Lite register block for step 07.
 create_bd_cell -type module -reference custom_axi_lite custom_axi_0
 
+# Add AXI BRAM for step 08 PS-to-PL memory testing.
+create_bd_cell -type ip -vlnv xilinx.com:ip:axi_bram_ctrl:4.1 axi_bram_ctrl_0
+set_property -dict [list \
+    CONFIG.DATA_WIDTH {32} \
+    CONFIG.SINGLE_PORT_BRAM {1} \
+] [get_bd_cells axi_bram_ctrl_0]
+
 # Create external ports for PL I/O
 create_bd_port -dir O -from 3 -to 0 led
 create_bd_port -dir I -from 3 -to 0 btn
@@ -78,11 +85,21 @@ apply_bd_automation -rule xilinx.com:bd_rule:axi4 -config {
     Clk /ps7/FCLK_CLK0
 } [get_bd_intf_pins custom_axi_0/S_AXI]
 
+apply_bd_automation -rule xilinx.com:bd_rule:axi4 -config {
+    Master /ps7/M_AXI_GP0
+    Clk /ps7/FCLK_CLK0
+} [get_bd_intf_pins axi_bram_ctrl_0/S_AXI]
+
+apply_bd_automation -rule xilinx.com:bd_rule:bram_cntlr -config {
+    BRAM "Auto"
+} [get_bd_intf_pins axi_bram_ctrl_0/BRAM_PORTA]
+
 # Keep the PS-to-PL MMIO map stable for bare-metal software.
 assign_bd_address -offset 0x41200000 -range 0x10000 -target_address_space [get_bd_addr_spaces ps7/Data] [get_bd_addr_segs axi_gpio_led/S_AXI/Reg] -force
 assign_bd_address -offset 0x41210000 -range 0x10000 -target_address_space [get_bd_addr_spaces ps7/Data] [get_bd_addr_segs axi_gpio_btn/S_AXI/Reg] -force
 assign_bd_address -offset 0x42800000 -range 0x10000 -target_address_space [get_bd_addr_spaces ps7/Data] [get_bd_addr_segs axi_timer_0/S_AXI/Reg] -force
 assign_bd_address -offset 0x43C00000 -range 0x10000 -target_address_space [get_bd_addr_spaces ps7/Data] [get_bd_addr_segs custom_axi_0/S_AXI/reg0] -force
+assign_bd_address -offset 0x42000000 -range 0x10000 -target_address_space [get_bd_addr_spaces ps7/Data] [get_bd_addr_segs axi_bram_ctrl_0/S_AXI/Mem0] -force
 
 # Validate block design
 validate_bd_design

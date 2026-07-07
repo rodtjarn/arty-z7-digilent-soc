@@ -56,7 +56,7 @@ make clean
 
 ## Zynq SoC (arty-z7-soc/)
 
-Zynq PS7 + AXI GPIO + AXI Timer + custom AXI-Lite: 4-bit LED output at `0x41200000`, 4-bit button input at `0x41210000`, AXI Timer 0 at `0x42800000`, custom AXI-Lite register block at `0x43C00000`.
+Zynq PS7 + AXI GPIO + AXI Timer + custom AXI-Lite + AXI BRAM: 4-bit LED output at `0x41200000`, 4-bit button input at `0x41210000`, AXI BRAM at `0x42000000`, AXI Timer 0 at `0x42800000`, custom AXI-Lite register block at `0x43C00000`.
 
 ```
 make all      # create BD, generate targets, synth, impl, bitstream + XSA
@@ -91,6 +91,7 @@ UART-driven diagnostic suite loaded over JTAG into low OCM. UART0 is the primary
 - GIC/private timer interrupt delivery.
 - AXI Timer PL peripheral count test.
 - Custom AXI-Lite ID/scratch/counter/status register test.
+- AXI BRAM memory-pattern test.
 - DDR memory at `0x00100000` using four 64 KiB pattern passes.
 
 ### Build
@@ -99,11 +100,11 @@ UART-driven diagnostic suite loaded over JTAG into low OCM. UART0 is the primary
 cd sw && make
 ```
 
-Requires ARM GCC in PATH, or set `CC` to the full path. Produces `gpio_test_low.elf` (full suite), plus focused low-OCM ELFs for UART, DDR, GPIO, buttons, timer, GIC, AXI Timer, and custom AXI-Lite.
+Requires ARM GCC in PATH, or set `CC` to the full path. Produces `gpio_test_low.elf` (full suite), plus focused low-OCM ELFs for UART, DDR, GPIO, buttons, timer, GIC, AXI Timer, custom AXI-Lite, and AXI BRAM.
 
 | File | Purpose |
 |------|---------|
-| `sw/gpio_test.c` | Main test: UART reporting, FCLK enable, AXI GPIO, button sampling, ARM global timer, GIC, AXI Timer, custom AXI-Lite, DDR pattern checks |
+| `sw/gpio_test.c` | Main test: UART reporting, FCLK enable, AXI GPIO, button sampling, ARM global timer, GIC, AXI Timer, custom AXI-Lite, AXI BRAM, DDR pattern checks |
 | `sw/startup.s` | Low vector table, SVC/IRQ stack init, IRQ entry wrapper |
 | `sw/lscript_low.ld` | **Use this**: OCM at `0x00000000` (JTAG boot alias), stack at `0x0000F000`, top OCM bytes reserved for harness status |
 | `sw/lscript.ld` | OCM at `0xFFFC0000` — DAP-blocked, cannot be used from xsdb |
@@ -127,7 +128,8 @@ cd sw && make run-timer  # ARM global timer sanity test
 cd sw && make run-gic    # GIC/private timer interrupt test
 cd sw && make run-axi-timer # AXI Timer PL peripheral test
 cd sw && make run-custom-axi # custom AXI-Lite register test
-cd sw && make run        # full UART + AXI GPIO + buttons + timer + GIC + AXI Timer + custom AXI + DDR suite
+cd sw && make run-axi-bram # AXI BRAM memory-pattern test
+cd sw && make run        # full UART + AXI GPIO + buttons + timer + GIC + AXI Timer + custom AXI + AXI BRAM + DDR suite
 cd sw && make regress-baremetal # all implemented tests with summary
 ```
 
@@ -142,7 +144,7 @@ Numbered step targets are also available from the repo root:
 | 5 | `make step-05-gic` | Working | Uses Cortex-A9 private timer interrupt ID 29; keep IRQ entry in low vectors and initialize IRQ mode stack before enabling IRQs |
 | 6 | `make step-06-axi-timer` | Working | AXI Timer is mapped at `0x42800000`; keep the Vivado BD, committed bitstream/XSA, and firmware address constants in sync |
 | 7 | `make step-07-custom-axi` | Working | Custom AXI-Lite is mapped at `0x43C00000`; test ID `0xA7100007`, scratch readback, counter movement, and status derivation |
-| 8 | `make step-08-axi-bram` | Planned | Keep the BRAM address range documented and distinct from DDR |
+| 8 | `make step-08-axi-bram` | Working | AXI BRAM is mapped at `0x42000000`; keep it distinct from DDR and other PL MMIO; current firmware tests 16 KiB with four pattern passes |
 | 9 | `make step-09-cache-mmu` | Planned | MMIO must remain device/strongly ordered; rerun DDR and AXI tests after enabling caches |
 | 10 | `make step-10-sd-raw` | Planned | Keep this bare-metal SD0 only; do not rely on U-Boot/Linux helpers |
 
@@ -156,6 +158,7 @@ Agent success rules for bare-metal steps:
 - `make regress-baremetal` must keep running after an implemented test fails, print a final PASS/FAIL/SKIP summary, and exit nonzero if any implemented test failed.
 - Step 06 is a polled AXI Timer test. Do not convert it to depend on interrupt wiring until the BD deliberately connects `axi_timer_0/interrupt` and the GIC mapping is documented/tested.
 - Step 07 uses repo-owned RTL via a Vivado module-reference BD cell. Keep `src/custom_axi_lite.v`, `scripts/build.tcl`, committed bitstream/XSA, and firmware register constants in sync. The module-ref address segment is `custom_axi_0/S_AXI/reg0`, not `Reg`.
+- Step 08 uses Xilinx `axi_bram_ctrl` plus auto-created `blk_mem_gen` via the `bram_cntlr` BD automation rule. Keep the address segment `axi_bram_ctrl_0/S_AXI/Mem0` mapped at `0x42000000` and do not confuse this PL BRAM with DDR.
 - Keep planned targets failing fast with "not implemented yet" until the hardware/firmware support is real.
 - When a step passes hardware, update README/AGENTS, commit only the relevant source/docs/generated hardware artifacts, then push. Do not include unrelated dirty files such as pre-existing bitstream/XSA changes unless the step intentionally changed hardware.
 

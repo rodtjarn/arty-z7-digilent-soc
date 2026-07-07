@@ -34,7 +34,7 @@ step-03-buttons: build
 step-04-timer: build
 	$(MAKE) -C sw step-04-timer
 
-step-05-gic:
+step-05-gic: build
 	$(MAKE) -C sw step-05-gic
 
 step-06-axi-timer:
@@ -83,6 +83,7 @@ help:
 	@echo "  step-02-ddr       - Run bare-metal DDR pattern test"
 	@echo "  step-03-buttons   - Run bare-metal button sampling test"
 	@echo "  step-04-timer     - Run bare-metal ARM global timer test"
+	@echo "  step-05-gic       - Run bare-metal GIC private timer IRQ test"
 	@echo "  steps-working     - Run all implemented step tests"
 	@echo "  regress-baremetal - Run implemented bare-metal regression tests with summary"
 	@echo "  clean      - Clean hw and sw build artifacts"

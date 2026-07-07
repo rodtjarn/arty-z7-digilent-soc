@@ -22,5 +22,6 @@ SECTIONS {
         *(COMMON)
     } > ocm
 
+    _irq_stack_end = ORIGIN(ocm) + LENGTH(ocm) - 0x400;
     _stack_end = ORIGIN(ocm) + LENGTH(ocm);
 }

@@ -20,6 +20,29 @@
 #define GT_COUNTER_HIGH   0x04u
 #define GT_CONTROL        0x08u
 
+#define GIC_CPU_BASE      0xF8F00100u
+#define GIC_CPU_CTRL      0x00u
+#define GIC_CPU_PRIMASK   0x04u
+#define GIC_CPU_IAR       0x0Cu
+#define GIC_CPU_EOIR      0x10u
+
+#define GIC_DIST_BASE     0xF8F01000u
+#define GIC_DIST_CTRL     0x000u
+#define GIC_DIST_SET_EN   0x100u
+#define GIC_DIST_CLR_EN   0x180u
+#define GIC_DIST_PRIORITY 0x400u
+
+#define PRIV_TIMER_BASE   0xF8F00600u
+#define PRIV_TIMER_LOAD   0x00u
+#define PRIV_TIMER_COUNT  0x04u
+#define PRIV_TIMER_CTRL   0x08u
+#define PRIV_TIMER_ISR    0x0Cu
+
+#define PRIV_TIMER_IRQ_ID 29u
+#define PRIV_TIMER_CTRL_ENABLE 0x1u
+#define PRIV_TIMER_CTRL_AUTO_RELOAD 0x2u
+#define PRIV_TIMER_CTRL_IRQ_ENABLE 0x4u
+
 #define DDR_TEST_BASE     0x00100000u
 #define DDR_TEST_WORDS    16384u
 
@@ -32,6 +55,7 @@
 #define TEST_MODE_BUTTONS 3
 #define TEST_MODE_TIMER   4
 #define TEST_MODE_GPIO    5
+#define TEST_MODE_GIC     6
 
 #ifndef TEST_MODE
 #define TEST_MODE TEST_MODE_FULL
@@ -56,16 +80,23 @@
 #define STAGE_DDR         0x00000005u
 #define STAGE_DONE        0x00000006u
 #define STAGE_UART        0x00000007u
+#define STAGE_GIC         0x00000008u
 
 #define FAIL_AXI_DATA     0x00000102u
 #define FAIL_TIMER_STUCK  0x00000301u
 #define FAIL_DDR_PATTERN  0x00000401u
+#define FAIL_GIC_NO_IRQ   0x00000501u
+#define FAIL_GIC_BAD_IRQ  0x00000502u
 
 #define REG32(addr) (*(volatile unsigned int *)(addr))
+#define REG8(addr)  (*(volatile unsigned char *)(addr))
 
 typedef unsigned int u32;
 
 static u32 led_ready;
+static volatile u32 gic_irq_count;
+static volatile u32 gic_last_irq_id;
+static volatile u32 gic_unexpected_irq_id;
 
 static void delay(volatile u32 count) {
     while (count--) {
@@ -170,6 +201,14 @@ static void fail(u32 code, u32 expected, u32 actual) {
     fail_detail(code, 0u, expected, actual);
 }
 
+static void enable_irq(void) {
+    __asm__ volatile("cpsie i" ::: "memory");
+}
+
+static void disable_irq(void) {
+    __asm__ volatile("cpsid i" ::: "memory");
+}
+
 static void enable_fclk(void) {
     REG32(SLCR_UNLOCK) = 0xDF0Du;
     REG32(FPGA0_CLK_CTRL) = 0x00400801u;
@@ -253,6 +292,71 @@ static void test_global_timer(void) {
     uart_puts("\n");
 }
 
+void irq_handler(void) {
+    u32 iar = REG32(GIC_CPU_BASE + GIC_CPU_IAR);
+    u32 irq_id = iar & 0x3FFu;
+
+    gic_last_irq_id = irq_id;
+    if (irq_id == PRIV_TIMER_IRQ_ID) {
+        REG32(PRIV_TIMER_BASE + PRIV_TIMER_ISR) = 1u;
+        gic_irq_count++;
+    } else if (irq_id < 1020u) {
+        gic_unexpected_irq_id = irq_id;
+    }
+
+    REG32(GIC_CPU_BASE + GIC_CPU_EOIR) = iar;
+}
+
+static void test_gic_private_timer(void) {
+    const u32 irq_bit = 1u << PRIV_TIMER_IRQ_ID;
+
+    stage(STAGE_GIC, "gic private timer irq");
+    disable_irq();
+
+    gic_irq_count = 0u;
+    gic_last_irq_id = 0xFFFFFFFFu;
+    gic_unexpected_irq_id = 0xFFFFFFFFu;
+
+    REG32(PRIV_TIMER_BASE + PRIV_TIMER_CTRL) = 0u;
+    REG32(PRIV_TIMER_BASE + PRIV_TIMER_ISR) = 1u;
+
+    REG32(GIC_DIST_BASE + GIC_DIST_CTRL) = 0u;
+    REG32(GIC_DIST_BASE + GIC_DIST_CLR_EN) = irq_bit;
+    REG8(GIC_DIST_BASE + GIC_DIST_PRIORITY + PRIV_TIMER_IRQ_ID) = 0xA0u;
+    REG32(GIC_DIST_BASE + GIC_DIST_SET_EN) = irq_bit;
+    REG32(GIC_CPU_BASE + GIC_CPU_PRIMASK) = 0xFFu;
+    REG32(GIC_CPU_BASE + GIC_CPU_CTRL) = 1u;
+    REG32(GIC_DIST_BASE + GIC_DIST_CTRL) = 1u;
+
+    REG32(PRIV_TIMER_BASE + PRIV_TIMER_LOAD) = 100000u;
+    REG32(PRIV_TIMER_BASE + PRIV_TIMER_CTRL) =
+        PRIV_TIMER_CTRL_ENABLE | PRIV_TIMER_CTRL_AUTO_RELOAD |
+        PRIV_TIMER_CTRL_IRQ_ENABLE;
+
+    enable_irq();
+    for (u32 timeout = 0u; timeout < 20000000u && gic_irq_count < 3u; timeout++) {
+        __asm__ volatile("nop");
+    }
+    disable_irq();
+
+    REG32(PRIV_TIMER_BASE + PRIV_TIMER_CTRL) = 0u;
+    REG32(PRIV_TIMER_BASE + PRIV_TIMER_ISR) = 1u;
+    REG32(GIC_DIST_BASE + GIC_DIST_CLR_EN) = irq_bit;
+
+    uart_puts("gic irq_count=");
+    uart_hex32(gic_irq_count);
+    uart_puts(" last_irq=");
+    uart_hex32(gic_last_irq_id);
+    uart_puts("\n");
+
+    if (gic_unexpected_irq_id != 0xFFFFFFFFu) {
+        fail(FAIL_GIC_BAD_IRQ, PRIV_TIMER_IRQ_ID, gic_unexpected_irq_id);
+    }
+    if (gic_irq_count < 3u) {
+        fail(FAIL_GIC_NO_IRQ, 3u, gic_irq_count);
+    }
+}
+
 static u32 ddr_pattern(u32 index, u32 pass_index) {
     switch (pass_index) {
     case 0u:
@@ -320,12 +424,17 @@ int main(void) {
     stage(STAGE_TIMER, "timer-only mode");
     test_global_timer();
     pass();
+#elif TEST_MODE == TEST_MODE_GIC
+    stage(STAGE_GIC, "gic-only mode");
+    test_gic_private_timer();
+    pass();
 #else
     init_pl_gpio();
     stage(STAGE_BOOT, "boot");
     test_axi_gpio();
     test_buttons();
     test_global_timer();
+    test_gic_private_timer();
     test_ddr();
     pass();
 #endif

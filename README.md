@@ -23,6 +23,7 @@ make step-01-uart
 make step-02-ddr
 make step-03-buttons
 make step-04-timer
+make step-05-gic
 ```
 
 `make steps-working` runs all currently implemented numbered steps.
@@ -81,6 +82,7 @@ cd sw && make run-ddr    # DDR pattern test, reported over UART
 cd sw && make run-gpio   # AXI GPIO LED write/readback test
 cd sw && make run-buttons # AXI GPIO button sampling test
 cd sw && make run-timer  # ARM global timer sanity test
+cd sw && make run-gic    # GIC/private timer interrupt test
 cd sw && make run        # full UART + AXI GPIO + buttons + timer + DDR suite
 cd sw && make regress-baremetal # all implemented tests with summary
 ```
@@ -95,7 +97,7 @@ Run these from the repo root. Every implemented step reports progress over UART 
 | 2 | `make step-02-ddr` | Working | DDR is usable from OCM-loaded bare-metal code; four 64 KiB pattern passes at `0x00100000` |
 | 3 | `make step-03-buttons` | Working | PS-to-PL AXI GPIO can sample the four user buttons and report observed high/low masks |
 | 4 | `make step-04-timer` | Working | ARM global timer counts while bare-metal code runs |
-| 5 | `make step-05-gic` | Planned | GIC setup and interrupt entry/return, likely first with an ARM private timer interrupt |
+| 5 | `make step-05-gic` | Working | GIC setup and IRQ entry/return using Cortex-A9 private timer interrupt ID 29 |
 | 6 | `make step-06-axi-timer` | Planned | AXI Timer IP in PL over `M_AXI_GP0`, first polled and then interrupt-driven |
 | 7 | `make step-07-custom-axi` | Planned | Custom AXI-Lite register block with ID/scratch/counter registers |
 | 8 | `make step-08-axi-bram` | Planned | AXI BRAM controller memory-pattern test through PS-to-PL AXI |
@@ -110,7 +112,7 @@ For a board-level smoke regression, use:
 make regress-baremetal
 ```
 
-This runs UART, DDR, GPIO, buttons, timer, and the full suite. It reports each implemented test as `PASS` or `FAIL`, reports steps 5-10 as `SKIP` until implemented, and exits nonzero if any implemented test fails.
+This runs UART, DDR, GPIO, buttons, timer, GIC, and the full suite. It reports each implemented test as `PASS` or `FAIL`, reports steps 6-10 as `SKIP` until implemented, and exits nonzero if any implemented test fails.
 
 ### `linux/` — Linux boot from SD card
 

@@ -100,7 +100,7 @@ Requires ARM GCC in PATH, or set `CC` to the full path. Produces `gpio_test_low.
 | File | Purpose |
 |------|---------|
 | `sw/gpio_test.c` | Main test: UART reporting, FCLK enable, AXI GPIO, button sampling, ARM global timer, DDR pattern checks |
-| `sw/startup.s` | Reset vector + stack init (5 lines) |
+| `sw/startup.s` | Low vector table, SVC/IRQ stack init, IRQ entry wrapper |
 | `sw/lscript_low.ld` | **Use this**: OCM at `0x00000000` (JTAG boot alias), stack at `0x0000F000`, top OCM bytes reserved for harness status |
 | `sw/lscript.ld` | OCM at `0xFFFC0000` — DAP-blocked, cannot be used from xsdb |
 | `sw/run_gpio_test.tcl` | Complete xsdb script: program → download → init → run |
@@ -120,6 +120,7 @@ cd sw && make run-ddr    # DDR pattern test, reported over UART
 cd sw && make run-gpio   # AXI GPIO LED write/readback test
 cd sw && make run-buttons # AXI GPIO button sampling test
 cd sw && make run-timer  # ARM global timer sanity test
+cd sw && make run-gic    # GIC/private timer interrupt test
 cd sw && make run        # full UART + AXI GPIO + buttons + timer + DDR suite
 cd sw && make regress-baremetal # all implemented tests with summary
 ```
@@ -132,7 +133,7 @@ Numbered step targets are also available from the repo root:
 | 2 | `make step-02-ddr` | Working | Run from OCM after `ps7_init`; print every DDR pass over UART |
 | 3 | `make step-03-buttons` | Working | Report observed high/low masks over UART; do not require button presses for automation unless the target name says so |
 | 4 | `make step-04-timer` | Working | Use UART plus OCM sentinel; no silent LED-only status |
-| 5 | `make step-05-gic` | Planned | Do not mark working until an interrupt fires and returns cleanly on hardware |
+| 5 | `make step-05-gic` | Working | Uses Cortex-A9 private timer interrupt ID 29; keep IRQ entry in low vectors and initialize IRQ mode stack before enabling IRQs |
 | 6 | `make step-06-axi-timer` | Planned | Do not add until the Vivado BD includes AXI Timer and the bitstream/XSA are intentionally updated |
 | 7 | `make step-07-custom-axi` | Planned | Include an ID register and scratch readback before testing behavior |
 | 8 | `make step-08-axi-bram` | Planned | Keep the BRAM address range documented and distinct from DDR |

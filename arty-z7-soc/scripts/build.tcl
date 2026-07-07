@@ -1,4 +1,4 @@
-# Build script for Arty Z7-10 SoC with PS + AXI GPIO + AXI Timer
+# Build script for Arty Z7-10 SoC with PS + AXI GPIO + AXI Timer + custom AXI-Lite
 
 set project_dir [file normalize "../hw"]
 set src_dir     [file normalize "../src"]
@@ -10,6 +10,9 @@ set_property target_language Verilog [current_project]
 
 # Enable automatic source management to pick up generated IP sources
 set_property source_mgmt_mode All [current_project]
+
+# Add repo-owned RTL before creating module-reference BD cells.
+add_files -norecurse [file join $src_dir custom_axi_lite.v]
 
 # Create block design
 create_bd_design design_1
@@ -44,6 +47,9 @@ set_property -dict [list \
 # Add AXI Timer for bare-metal PL peripheral testing
 create_bd_cell -type ip -vlnv xilinx.com:ip:axi_timer:2.0 axi_timer_0
 
+# Add a small custom AXI-Lite register block for step 07.
+create_bd_cell -type module -reference custom_axi_lite custom_axi_0
+
 # Create external ports for PL I/O
 create_bd_port -dir O -from 3 -to 0 led
 create_bd_port -dir I -from 3 -to 0 btn
@@ -67,10 +73,16 @@ apply_bd_automation -rule xilinx.com:bd_rule:axi4 -config {
     Clk /ps7/FCLK_CLK0
 } [get_bd_intf_pins axi_timer_0/S_AXI]
 
+apply_bd_automation -rule xilinx.com:bd_rule:axi4 -config {
+    Master /ps7/M_AXI_GP0
+    Clk /ps7/FCLK_CLK0
+} [get_bd_intf_pins custom_axi_0/S_AXI]
+
 # Keep the PS-to-PL MMIO map stable for bare-metal software.
 assign_bd_address -offset 0x41200000 -range 0x10000 -target_address_space [get_bd_addr_spaces ps7/Data] [get_bd_addr_segs axi_gpio_led/S_AXI/Reg] -force
 assign_bd_address -offset 0x41210000 -range 0x10000 -target_address_space [get_bd_addr_spaces ps7/Data] [get_bd_addr_segs axi_gpio_btn/S_AXI/Reg] -force
 assign_bd_address -offset 0x42800000 -range 0x10000 -target_address_space [get_bd_addr_spaces ps7/Data] [get_bd_addr_segs axi_timer_0/S_AXI/Reg] -force
+assign_bd_address -offset 0x43C00000 -range 0x10000 -target_address_space [get_bd_addr_spaces ps7/Data] [get_bd_addr_segs custom_axi_0/S_AXI/reg0] -force
 
 # Validate block design
 validate_bd_design

@@ -10,6 +10,14 @@
 #define AXI_TIMER_CSR_LOAD 0x20u
 #define AXI_TIMER_CSR_ENT 0x80u
 
+#define CUSTOM_AXI_BASE   0x43C00000u
+#define CUSTOM_AXI_ID     0x00u
+#define CUSTOM_AXI_SCRATCH 0x04u
+#define CUSTOM_AXI_COUNTER 0x08u
+#define CUSTOM_AXI_STATUS 0x0Cu
+#define CUSTOM_AXI_ID_VALUE 0xA7100007u
+#define CUSTOM_AXI_STATUS_XOR 0x5A5AA5A5u
+
 #define UART0_BASE        0xE0000000u
 #define UART_CR           0x00u
 #define UART_SR           0x2Cu
@@ -64,6 +72,7 @@
 #define TEST_MODE_GPIO    5
 #define TEST_MODE_GIC     6
 #define TEST_MODE_AXI_TIMER 7
+#define TEST_MODE_CUSTOM_AXI 8
 
 #ifndef TEST_MODE
 #define TEST_MODE TEST_MODE_FULL
@@ -90,9 +99,14 @@
 #define STAGE_UART        0x00000007u
 #define STAGE_GIC         0x00000008u
 #define STAGE_AXI_TIMER   0x00000009u
+#define STAGE_CUSTOM_AXI  0x0000000Au
 
 #define FAIL_AXI_DATA     0x00000102u
 #define FAIL_AXI_TIMER_STUCK 0x00000202u
+#define FAIL_CUSTOM_AXI_ID 0x00000210u
+#define FAIL_CUSTOM_AXI_SCRATCH 0x00000211u
+#define FAIL_CUSTOM_AXI_COUNTER 0x00000212u
+#define FAIL_CUSTOM_AXI_STATUS 0x00000213u
 #define FAIL_TIMER_STUCK  0x00000301u
 #define FAIL_DDR_PATTERN  0x00000401u
 #define FAIL_GIC_NO_IRQ   0x00000501u
@@ -395,6 +409,57 @@ static void test_axi_timer(void) {
     }
 }
 
+static void test_custom_axi(void) {
+    static const u32 patterns[] = {
+        0x00000000u, 0xFFFFFFFFu, 0x12345678u, 0xA5A55A5Au
+    };
+    u32 id;
+    u32 start;
+    u32 end;
+    u32 status;
+
+    stage(STAGE_CUSTOM_AXI, "custom axi-lite registers");
+
+    id = REG32(CUSTOM_AXI_BASE + CUSTOM_AXI_ID);
+    uart_puts("custom_axi id=");
+    uart_hex32(id);
+    uart_puts("\n");
+    if (id != CUSTOM_AXI_ID_VALUE) {
+        fail(FAIL_CUSTOM_AXI_ID, CUSTOM_AXI_ID_VALUE, id);
+    }
+
+    for (u32 i = 0u; i < sizeof(patterns) / sizeof(patterns[0]); i++) {
+        REG32(CUSTOM_AXI_BASE + CUSTOM_AXI_SCRATCH) = patterns[i];
+        if (REG32(CUSTOM_AXI_BASE + CUSTOM_AXI_SCRATCH) != patterns[i]) {
+            fail(FAIL_CUSTOM_AXI_SCRATCH, patterns[i],
+                 REG32(CUSTOM_AXI_BASE + CUSTOM_AXI_SCRATCH));
+        }
+    }
+
+    start = REG32(CUSTOM_AXI_BASE + CUSTOM_AXI_COUNTER);
+    delay(1000000u);
+    end = REG32(CUSTOM_AXI_BASE + CUSTOM_AXI_COUNTER);
+    uart_puts("custom_axi counter_start=");
+    uart_hex32(start);
+    uart_puts(" counter_end=");
+    uart_hex32(end);
+    uart_puts("\n");
+    if (end == start || (end - start) < 100u) {
+        fail(FAIL_CUSTOM_AXI_COUNTER, start, end);
+    }
+
+    status = REG32(CUSTOM_AXI_BASE + CUSTOM_AXI_STATUS);
+    uart_puts("custom_axi scratch=");
+    uart_hex32(patterns[3]);
+    uart_puts(" status=");
+    uart_hex32(status);
+    uart_puts("\n");
+    if (status != (patterns[3] ^ CUSTOM_AXI_STATUS_XOR)) {
+        fail(FAIL_CUSTOM_AXI_STATUS, patterns[3] ^ CUSTOM_AXI_STATUS_XOR,
+             status);
+    }
+}
+
 static u32 ddr_pattern(u32 index, u32 pass_index) {
     switch (pass_index) {
     case 0u:
@@ -470,6 +535,10 @@ int main(void) {
     stage(STAGE_AXI_TIMER, "axi-timer-only mode");
     test_axi_timer();
     pass();
+#elif TEST_MODE == TEST_MODE_CUSTOM_AXI
+    stage(STAGE_CUSTOM_AXI, "custom-axi-only mode");
+    test_custom_axi();
+    pass();
 #else
     init_pl_gpio();
     stage(STAGE_BOOT, "boot");
@@ -478,6 +547,7 @@ int main(void) {
     test_global_timer();
     test_gic_private_timer();
     test_axi_timer();
+    test_custom_axi();
     test_ddr();
     pass();
 #endif

@@ -1,4 +1,4 @@
-# Arty Z7-10 SoC build system (Zynq PS + AXI GPIO)
+# Arty Z7-10 SoC build system (Zynq PS + AXI GPIO + AXI Timer + custom AXI-Lite)
 VIVADO      := vivado
 SCRIPT_DIR  := scripts
 SRC_DIR     := src
@@ -9,7 +9,7 @@ XSA         := $(HW_DIR)/arty_z7_soc.xsa
 .PHONY: all
 all: $(BITSTREAM)
 
-$(BITSTREAM): $(SCRIPT_DIR)/build.tcl $(SRC_DIR)/top.xdc
+$(BITSTREAM): $(SCRIPT_DIR)/build.tcl $(SRC_DIR)/top.xdc $(SRC_DIR)/custom_axi_lite.v
 	mkdir -p $(HW_DIR)
 	cd $(SCRIPT_DIR) && $(VIVADO) -mode batch -source build.tcl -notrace
 

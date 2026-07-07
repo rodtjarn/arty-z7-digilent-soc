@@ -26,6 +26,7 @@ make step-04-timer
 ```
 
 `make steps-working` runs all currently implemented numbered steps.
+`make regress-baremetal` runs every implemented bare-metal test, keeps going after failures, and prints a final PASS/FAIL/SKIP summary.
 
 The top-level numbered targets first build any stale hardware/software outputs, then run the selected JTAG test. The `sw/` targets also preflight the required bitstream and `ps7_init.tcl`; if either is missing, they fail with a direct rebuild hint instead of an opaque `xsdb` error. During execution, the `xsdb` harness checks the live FPGA state and programs the PL when the bitstream is missing from the device or changed from the last stamped run.
 
@@ -81,6 +82,7 @@ cd sw && make run-gpio   # AXI GPIO LED write/readback test
 cd sw && make run-buttons # AXI GPIO button sampling test
 cd sw && make run-timer  # ARM global timer sanity test
 cd sw && make run        # full UART + AXI GPIO + buttons + timer + DDR suite
+cd sw && make regress-baremetal # all implemented tests with summary
 ```
 
 #### Bare-metal 10-step plan
@@ -101,6 +103,14 @@ Run these from the repo root. Every implemented step reports progress over UART 
 | 10 | `make step-10-sd-raw` | Planned | Bare-metal SD0 raw-sector read without U-Boot or Linux |
 
 Planned targets intentionally fail fast with a clear "not implemented yet" message until their firmware/hardware support exists.
+
+For a board-level smoke regression, use:
+
+```
+make regress-baremetal
+```
+
+This runs UART, DDR, GPIO, buttons, timer, and the full suite. It reports each implemented test as `PASS` or `FAIL`, reports steps 5-10 as `SKIP` until implemented, and exits nonzero if any implemented test fails.
 
 ### `linux/` — Linux boot from SD card
 

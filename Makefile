@@ -6,7 +6,7 @@
 .PHONY: all build run clean help linux-boot \
 	step-01-uart step-02-ddr step-03-buttons step-04-timer step-05-gic \
 	step-06-axi-timer step-07-custom-axi step-08-axi-bram \
-	step-09-cache-mmu step-10-sd-raw steps-working
+	step-09-cache-mmu step-10-sd-raw steps-working regress-baremetal
 
 all: run
 
@@ -55,6 +55,9 @@ step-10-sd-raw:
 steps-working: build
 	$(MAKE) -C sw steps-working
 
+regress-baremetal: build
+	$(MAKE) -C sw regress-baremetal
+
 # Programs the bitstream, downloads the ELF, inits the PS, and runs the test.
 # Programming and running can't be split into separate Make targets: the ELF
 # must be downloaded before ps7_init runs (see sw/run_gpio_test.tcl), so sw's
@@ -81,4 +84,5 @@ help:
 	@echo "  step-03-buttons   - Run bare-metal button sampling test"
 	@echo "  step-04-timer     - Run bare-metal ARM global timer test"
 	@echo "  steps-working     - Run all implemented step tests"
+	@echo "  regress-baremetal - Run implemented bare-metal regression tests with summary"
 	@echo "  clean      - Clean hw and sw build artifacts"

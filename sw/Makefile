@@ -104,6 +104,36 @@ step-10-sd-raw:
 
 steps-working: step-01-uart step-02-ddr step-03-buttons step-04-timer
 
+regress-baremetal: all check-hw-artifacts hw_server
+	@failures=0; total=0; results=""; \
+	run_test() { \
+		name="$$1"; target="$$2"; total=$$((total + 1)); \
+		printf '\n=== %s ===\n' "$$name"; \
+		if $(MAKE) --no-print-directory $$target; then \
+			results="$${results}PASS $$name\n"; \
+		else \
+			rc=$$?; \
+			results="$${results}FAIL $$name (exit $$rc)\n"; \
+			failures=$$((failures + 1)); \
+		fi; \
+	}; \
+	run_test "step-01-uart" "run-uart"; \
+	run_test "step-02-ddr" "run-ddr"; \
+	run_test "run-gpio" "run-gpio"; \
+	run_test "step-03-buttons" "run-buttons"; \
+	run_test "step-04-timer" "run-timer"; \
+	run_test "full-suite" "run"; \
+	printf '\n=== Bare-metal regression summary ===\n'; \
+	printf '%b' "$$results"; \
+	printf 'SKIP step-05-gic (not implemented)\n'; \
+	printf 'SKIP step-06-axi-timer (not implemented)\n'; \
+	printf 'SKIP step-07-custom-axi (not implemented)\n'; \
+	printf 'SKIP step-08-axi-bram (not implemented)\n'; \
+	printf 'SKIP step-09-cache-mmu (not implemented)\n'; \
+	printf 'SKIP step-10-sd-raw (not implemented)\n'; \
+	printf 'Ran %d implemented tests, %d failed.\n' "$$total" "$$failures"; \
+	test "$$failures" -eq 0
+
 check-hw-artifacts:
 	@test -f "$(BIT_FILE)" || { \
 		echo "Missing $(BIT_FILE). Run 'make build' from the repo root or 'make -C arty-z7-soc all'." >&2; \
@@ -136,4 +166,5 @@ clean:
 .PHONY: all clean run run-uart run-ddr run-gpio run-buttons run-timer \
 	step-01-uart step-02-ddr step-03-buttons step-04-timer step-05-gic \
 	step-06-axi-timer step-07-custom-axi step-08-axi-bram \
-	step-09-cache-mmu step-10-sd-raw steps-working check-hw-artifacts hw_server
+	step-09-cache-mmu step-10-sd-raw steps-working regress-baremetal \
+	check-hw-artifacts hw_server
